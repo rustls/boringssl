@@ -93,6 +93,14 @@ type ShimConfiguration struct {
 	// like “SSL_ERROR_NO_CYPHER_OVERLAP”.
 	ErrorMap map[string]string
 
+	// TestErrorMap maps from full test names to the correct error
+	// string for the shim in question.
+	TestErrorMap map[string]string
+
+	// TestLocalErrorMap maps from full test names to the correct local
+	// error string for the shim in question.
+	TestLocalErrorMap map[string]string
+
 	// HalfRTTTickets is the number of half-RTT tickets the client should
 	// expect before half-RTT data when testing 0-RTT.
 	HalfRTTTickets int
@@ -1232,7 +1240,11 @@ func acceptOrWait(listener *net.TCPListener, waitChan chan error) (net.Conn, err
 	}
 }
 
-func translateExpectedError(errorStr string) string {
+func translateExpectedError(testName string, errorStr string) string {
+	if translated, ok := shimConfig.TestErrorMap[testName]; ok {
+		return translated
+	}
+
 	if translated, ok := shimConfig.ErrorMap[errorStr]; ok {
 		return translated
 	}
@@ -1242,6 +1254,14 @@ func translateExpectedError(errorStr string) string {
 	}
 
 	return errorStr
+}
+
+func translateExpectedLocalError(testName string, localError string) string {
+	if translated, ok := shimConfig.TestLocalErrorMap[testName]; ok {
+		return translated
+	}
+
+	return localError
 }
 
 func runTest(statusChan chan statusMsg, test *testCase, shimPath string, mallocNumToFail int64) error {
@@ -1601,18 +1621,20 @@ func runTest(statusChan chan statusMsg, test *testCase, shimPath string, mallocN
 	}
 
 	failed := err != nil || childErr != nil
-	expectedError := translateExpectedError(test.expectedError)
+	expectedError := translateExpectedError(test.name, test.expectedError)
 	correctFailure := len(expectedError) == 0 || strings.Contains(stderr, expectedError)
+	shouldFail := test.shouldFail || expectedError != ""
 
+	var expectedLocalError = translateExpectedLocalError(test.name, test.expectedLocalError)
 	localError := "none"
 	if err != nil {
 		localError = err.Error()
 	}
-	if len(test.expectedLocalError) != 0 {
-		correctFailure = correctFailure && strings.Contains(localError, test.expectedLocalError)
+	if len(expectedLocalError) != 0 {
+		correctFailure = correctFailure && strings.Contains(localError, expectedLocalError)
 	}
 
-	if failed != test.shouldFail || failed && !correctFailure || mustFail {
+	if failed != shouldFail || failed && !correctFailure || mustFail {
 		childError := "none"
 		if childErr != nil {
 			childError = childErr.Error()
@@ -1620,9 +1642,9 @@ func runTest(statusChan chan statusMsg, test *testCase, shimPath string, mallocN
 
 		var msg string
 		switch {
-		case failed && !test.shouldFail:
+		case failed && !shouldFail:
 			msg = "unexpected failure"
-		case !failed && test.shouldFail:
+		case !failed && shouldFail:
 			msg = "unexpected success"
 		case failed && !correctFailure:
 			msg = "bad error (wanted '" + expectedError + "' / '" + test.expectedLocalError + "')"
