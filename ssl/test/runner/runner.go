@@ -95,6 +95,14 @@ type ShimConfiguration struct {
 	// like “SSL_ERROR_NO_CYPHER_OVERLAP”.
 	ErrorMap map[string]string
 
+	// TestErrorMap maps from full test names to the correct error
+	// string for the shim in question.
+	TestErrorMap map[string]string
+
+	// TestLocalErrorMap maps from full test names to the correct local
+	// error string for the shim in question.
+	TestLocalErrorMap map[string]string
+
 	// HalfRTTTickets is the number of half-RTT tickets the client should
 	// expect before half-RTT data when testing 0-RTT.
 	HalfRTTTickets int
@@ -1416,7 +1424,11 @@ func doExchanges(test *testCase, shim *shimProcess, resumeCount int, transcripts
 	return nil
 }
 
-func translateExpectedError(errorStr string) string {
+func translateExpectedError(testName string, errorStr string) string {
+	if translated, ok := shimConfig.TestErrorMap[testName]; ok {
+		return translated
+	}
+
 	if translated, ok := shimConfig.ErrorMap[errorStr]; ok {
 		return translated
 	}
@@ -1431,6 +1443,14 @@ func translateExpectedError(errorStr string) string {
 // shimInitialWrite is the data we expect from the shim when the
 // -shim-writes-first flag is used.
 const shimInitialWrite = "hello"
+
+func translateExpectedLocalError(testName string, localError string) string {
+	if translated, ok := shimConfig.TestLocalErrorMap[testName]; ok {
+		return translated
+	}
+
+	return localError
+}
 
 func runTest(dispatcher *shimDispatcher, statusChan chan statusMsg, test *testCase, shimPath string, mallocNumToFail int64) error {
 	// Help debugging panics on the Go side.
@@ -1700,15 +1720,17 @@ func runTest(dispatcher *shimDispatcher, statusChan chan statusMsg, test *testCa
 	}
 
 	failed := localErr != nil || childErr != nil
-	expectedError := translateExpectedError(test.expectedError)
+	expectedError := translateExpectedError(test.name, test.expectedError)
 	correctFailure := len(expectedError) == 0 || strings.Contains(stderr, expectedError)
+	shouldFail := test.shouldFail || expectedError != ""
 
+	var expectedLocalError = translateExpectedLocalError(test.name, test.expectedLocalError)
 	localErrString := "none"
 	if localErr != nil {
 		localErrString = localErr.Error()
 	}
 	if len(test.expectedLocalError) != 0 {
-		correctFailure = correctFailure && strings.Contains(localErrString, test.expectedLocalError)
+		correctFailure = correctFailure && strings.Contains(localErrString, expectedLocalError)
 	}
 
 	if failed != test.shouldFail || failed && !correctFailure || mustFail {
@@ -1719,9 +1741,9 @@ func runTest(dispatcher *shimDispatcher, statusChan chan statusMsg, test *testCa
 
 		var msg string
 		switch {
-		case failed && !test.shouldFail:
+		case failed && !shouldFail:
 			msg = "unexpected failure"
-		case !failed && test.shouldFail:
+		case !failed && shouldFail:
 			msg = "unexpected success"
 		case failed && !correctFailure:
 			msg = "bad error (wanted '" + expectedError + "' / '" + test.expectedLocalError + "')"
