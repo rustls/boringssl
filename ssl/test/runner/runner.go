@@ -95,6 +95,14 @@ type ShimConfiguration struct {
 	// like “SSL_ERROR_NO_CYPHER_OVERLAP”.
 	ErrorMap map[string][]string
 
+	// TestErrorMap maps from full test names to the correct error
+	// string for the shim in question.
+	TestErrorMap map[string]string
+
+	// TestLocalErrorMap maps from full test names to the correct local
+	// error string for the shim in question.
+	TestLocalErrorMap map[string]string
+
 	// HalfRTTTickets is the number of half-RTT tickets the client should
 	// expect before half-RTT data when testing 0-RTT.
 	HalfRTTTickets int
@@ -1516,10 +1524,12 @@ func doExchanges(test *testCase, shim *shimProcess, resumeCount int, transcripts
 	return nil
 }
 
-// translateExpectedError uses a canonical BoringSSL error to produce
-// a slice of expected canonical errors in bogo_shim_config.json.
-func translateExpectedError(canonical string) []string {
-	if translated, found := shimConfig.ErrorMap[canonical]; found {
+func translateExpectedError(testName string, canonical string) []string {
+	if translated, ok := shimConfig.TestErrorMap[testName]; ok {
+		return []string{translated}
+	}
+
+	if translated, ok := shimConfig.ErrorMap[canonical]; ok {
 		return translated
 	}
 
@@ -1624,6 +1634,14 @@ func appendCredentialFlags(flags []string, cred *Credential, prefix string, newC
 	}
 	handleBase64Field("session-id-context", cred.SessionIDContext)
 	return flags
+}
+
+func translateExpectedLocalError(testName string, localError string) string {
+	if translated, ok := shimConfig.TestLocalErrorMap[testName]; ok {
+		return translated
+	}
+
+	return localError
 }
 
 func runTest(dispatcher *shimDispatcher, statusChan chan statusMsg, test *testCase, shimPath string, mallocNumToFail int64) error {
@@ -1938,15 +1956,17 @@ func runTest(dispatcher *shimDispatcher, statusChan chan statusMsg, test *testCa
 	}
 
 	failed := localErr != nil || childErr != nil
-	expectedErrors := translateExpectedError(test.expectedError)
+	expectedErrors := translateExpectedError(test.name, test.expectedError)
 	correctFailure := *looseErrors || matchError(expectedErrors, stderr)
+	shouldFail := test.shouldFail || (len(expectedErrors) >= 1 && expectedErrors[0] != "")
 
+	var expectedLocalError = translateExpectedLocalError(test.name, test.expectedLocalError)
 	localErrString := "none"
 	if localErr != nil {
 		localErrString = localErr.Error()
 	}
 	if test.expectedLocalError != "" {
-		correctFailure = correctFailure && strings.Contains(localErrString, test.expectedLocalError)
+		correctFailure = correctFailure && strings.Contains(localErrString, expectedLocalError)
 	}
 
 	if failed != test.shouldFail || failed && !correctFailure || mustFail {
@@ -1961,9 +1981,9 @@ func runTest(dispatcher *shimDispatcher, statusChan chan statusMsg, test *testCa
 
 		var msg string
 		switch {
-		case failed && !test.shouldFail:
+		case failed && !shouldFail:
 			msg = fmt.Sprintf("unexpected failure\ngot:\n%s\n", got)
-		case !failed && test.shouldFail:
+		case !failed && shouldFail:
 			msg = fmt.Sprintf("unexpected success\nwant:\n%s\n", want)
 		case failed && !correctFailure:
 			msg = fmt.Sprintf("unexpected error\ngot:\n%s\n\nwant:\n%s\n", got, want)
