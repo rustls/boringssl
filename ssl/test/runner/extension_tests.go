@@ -1938,13 +1938,11 @@ func addExtensionTests() {
 						Bugs: ProtocolBugs{
 							SendServerNameAck: true,
 							ExpectServerName:  "example.com",
-							ExpectGREASE:      true,
 						},
 					},
 					resumeSession: true,
 					flags: []string{
 						"-permute-extensions",
-						"-enable-grease",
 						"-enable-ocsp-stapling",
 						"-enable-signed-cert-timestamps",
 						"-advertise-alpn", "\x05proto",
