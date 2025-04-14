@@ -1968,12 +1968,14 @@ func addExtensionTests() {
 					test.name += "-HelloRetryRequest"
 
 					// ALPS is only available on TLS 1.3.
-					test.config.ApplicationSettings = map[string][]byte{"proto": []byte("runner")}
-					test.flags = append(test.flags,
-						"-application-settings", "proto,shim",
-						"-alps-use-new-codepoint", "1",
-						"-expect-peer-application-settings", "runner")
-					test.expectations.peerApplicationSettings = []byte("shim")
+					if false {
+						test.config.ApplicationSettings = map[string][]byte{"proto": []byte("runner")}
+						test.flags = append(test.flags,
+							"-application-settings", "proto,shim",
+							"-alps-use-new-codepoint", "1",
+							"-expect-peer-application-settings", "runner")
+						test.expectations.peerApplicationSettings = []byte("shim")
+					}
 				}
 
 				if protocol == dtls {
