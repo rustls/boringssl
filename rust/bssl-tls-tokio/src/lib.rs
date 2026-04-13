@@ -629,3 +629,6 @@ impl TokioTlsExt for TlsContextBuilder<TlsMode> {
         TlsAcceptor::new(self.build())
     }
 }
+
+#[cfg(feature = "hyper")]
+pub mod hyper;

@@ -18,18 +18,7 @@ use bssl_tls::{
         Server,
         TlsConnection, //
     },
-    context::TlsContextBuilder,
-    credentials::{
-        Certificate,
-        TlsCredentialBuilder, //
-    },
     errors::Error, //
-};
-use bssl_x509::{
-    certificates::X509Certificate,
-    keys::PrivateKey,
-    params::Trust,
-    store::X509StoreBuilder, //
 };
 use futures::future::FutureExt;
 use tokio::io::{
@@ -37,50 +26,22 @@ use tokio::io::{
     AsyncWriteExt, //
 };
 
-use super::{
-    CA,
-    RSA_SERVER_CERT,
-    RSA_SERVER_KEY, //
-};
 use crate::{
     TokioIo,
     TokioTlsConnection, //
 };
 
-fn dumb_server_client() -> Result<(TlsConnection<Server>, TlsConnection<Client>), Error> {
-    let ca = Certificate::parse_one_from_pem(CA, None)?;
-    let server_cert = Certificate::parse_one_from_pem(RSA_SERVER_CERT, None)?;
-    let server_key = PrivateKey::from_pem(RSA_SERVER_KEY, || unreachable!())?;
-
-    let mut server_ctx_builder = TlsContextBuilder::new_tls();
-    let server_cred = {
-        let mut builder = TlsCredentialBuilder::new();
-        builder
-            .with_certificate_chain(&[server_cert, ca])?
-            .with_private_key(server_key)?;
-        builder.build()
-    };
-    server_ctx_builder.with_credential(server_cred.unwrap())?;
-    let server_ctx = server_ctx_builder.build();
-    let server_conn = server_ctx.new_server_connection().build();
-
-    let mut client_ctx_builder = TlsContextBuilder::new_tls();
-    let mut cert_store = X509StoreBuilder::new();
-    cert_store
-        .set_trust(Trust::SslServer)?
-        .add_cert(X509Certificate::parse_one_from_pem(&CA)?)?;
-    let cert_store = cert_store.build();
-    client_ctx_builder.with_certificate_store(&cert_store);
-    let client_ctx = client_ctx_builder.build();
-    let client_conn = client_ctx.new_client_connection().build();
-
-    Ok((server_conn, client_conn))
+fn dumb_server_client() -> (TlsConnection<Server>, TlsConnection<Client>) {
+    let (server_builder, client_builder) = super::tls_ctx_builders();
+    let server_conn = server_builder.build().new_server_connection().build();
+    let client_conn = client_builder.build().new_client_connection().build();
+    (server_conn, client_conn)
 }
 
 #[cfg(unix)]
 #[tokio::test]
 async fn tokio_io() -> Result<(), Error> {
-    let (server_conn, client_conn) = dumb_server_client()?;
+    let (server_conn, client_conn) = dumb_server_client();
 
     let (server_tx, server_rx) = tokio::net::unix::pipe::pipe().unwrap();
     let (client_tx, client_rx) = tokio::net::unix::pipe::pipe().unwrap();

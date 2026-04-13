@@ -12,56 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use bssl_tls::{
-    context::TlsContextBuilder,
-    credentials::{
-        Certificate,
-        TlsCredentialBuilder, //
-    }, //
-};
-use bssl_x509::{
-    certificates::X509Certificate,
-    keys::PrivateKey,
-    params::Trust,
-    store::X509StoreBuilder, //
-};
 use tokio::io::{
     AsyncReadExt,
     AsyncWriteExt, //
 };
 
-use super::{
-    CA,
-    RSA_SERVER_CERT,
-    RSA_SERVER_KEY, //
-};
 use crate::TokioTlsExt;
 
 #[tokio::test]
 async fn high_level_tokio() -> Result<(), bssl_tls::errors::Error> {
-    let ca = Certificate::parse_one_from_pem(CA, None)?;
-    let server_cert = Certificate::parse_one_from_pem(RSA_SERVER_CERT, None)?;
-    let server_key = PrivateKey::from_pem(RSA_SERVER_KEY, || unreachable!())?;
-
-    let mut server_ctx_builder = TlsContextBuilder::new_tls();
-    let server_cred = {
-        let mut builder = TlsCredentialBuilder::new();
-        builder
-            .with_certificate_chain(&[server_cert, ca])?
-            .with_private_key(server_key)?;
-        builder.build()
-    };
-    server_ctx_builder.with_credential(server_cred.unwrap())?;
-    let mut builder = TlsContextBuilder::new_tls();
-    let ca = X509Certificate::parse_one_from_pem(CA)?;
-    let store = {
-        let mut store = X509StoreBuilder::new();
-        store.set_trust(Trust::SslServer)?.add_cert(ca)?;
-        store.build()
-    };
-    builder.with_certificate_store(&store);
-    let connector = builder.build_tokio_connector();
-    let acceptor = server_ctx_builder.build_tokio_acceptor();
+    let (server_builder, client_builder) = super::tls_ctx_builders();
+    let connector = client_builder.build_tokio_connector();
+    let acceptor = server_builder.build_tokio_acceptor();
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
