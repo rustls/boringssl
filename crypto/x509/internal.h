@@ -656,6 +656,25 @@ void x509_name_invalidate_cache(X509_NAME *name);
 int x509_name_copy(X509_NAME *dst, const X509_NAME *src);
 
 
+// Merkle Tree Certificate (MTC) verification functions.
+
+// x509_evaluate_mtc_subtree_inclusion_proof carries out the procedure in
+// section 4.3.2 of draft-ietf-plants-merkle-tree-certs to evaluate a subtree
+// inclusion proof for an entry at index `index` with hash `entry_hash` of a
+// subtree defined by [`subtree_start`, `subtree_end`). The `inclusion_proof` to
+// be evaluated is passed as a byte array consisting of concatenated hashes
+// produced from the `log_hash` algorithm. This function returns true if
+// inclusion proof evaluation succeeded, and if so, writes the expected subtree
+// hash for the specified subtree containing the entry to `out`, which must be
+// the right size for `log_hash`. It returns false on error, including if the
+// inclusion proof fails to evaluate.
+bool x509_evaluate_mtc_subtree_inclusion_proof(
+    Span<uint8_t> out, const EVP_MD *log_hash,
+    Span<const uint8_t> inclusion_proof, uint64_t index,
+    Span<const uint8_t> entry_hash, uint64_t subtree_start,
+    uint64_t subtree_end);
+
+
 // Standard extensions.
 
 extern const X509V3_EXT_METHOD v3_bcons, v3_nscert, v3_key_usage, v3_ext_ku;

@@ -17,8 +17,10 @@
 #include <algorithm>
 #include <functional>
 #include <initializer_list>
+#include <iomanip>
 #include <iterator>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -10668,6 +10670,635 @@ TEST(X509Test, PathLenSelfIssuedNotCountedButStillVerified) {
                          {/*self_issued=*/false, /*pathlen=*/1},
                          {/*self_issued=*/true, /*pathlen=*/1}}));
 }
+
+// Tests for `x509_evaluate_mtc_subtree_inclusion_proof`, which is an
+// internal-only function.
+#if !defined(BORINGSSL_SHARED_LIBRARY)
+
+// Generates a Merkle Tree for testing.
+class X509MerkleTreeTest : public ::testing::Test {
+ public:
+  using Entry = std::vector<uint8_t>;
+  using Hash = std::vector<uint8_t>;
+  using Level = std::vector<Hash>;
+
+  static bool IsValidSubtree(uint64_t start, uint64_t end) {
+    // Empty subtrees are explicitly allowed.
+    if (start == end) {
+      return true;
+    }
+    return GetCoveringSubtree(start, end) ==
+           /* possibly invalid */ Subtree{start, end};
+  }
+
+  X509MerkleTreeTest() = default;
+  ~X509MerkleTreeTest() override = default;
+
+  void SetUp() override {
+    // Default tree size and hash can be overridden by tests.
+    ASSERT_NO_FATAL_FAILURE(InitTestMerkleTree(EVP_sha256(), 256));
+  }
+
+  // This function generates a full Merkle Tree for testing (i.e. having its
+  // total entry count, `limit`, equal to a power of 2). Partial Merkle Trees,
+  // where some levels on the rightmost edge of the tree are skipped, are
+  // simulated as subsets of a complete tree.
+  void InitTestMerkleTree(const EVP_MD *hash, uint64_t limit) {
+    ASSERT_TRUE(IsPow2(limit));
+    limit_ = limit;
+    if (hash == hash_ && limit <= entries_.size()) {
+      return;
+    }
+
+    // Generate test entries compatible with the "accumulated" tests described
+    // in appendix C of draft-ietf-plants-merkle-tree-certs.
+    for (uint64_t index = entries_.size(); index < limit; ++index) {
+      Entry entry;
+      uint64_t num = index;
+      do {
+        entry.push_back(num & 0xff);
+        num >>= 8;
+      } while (num > 0);
+      entries_.push_back(std::move(entry));
+    }
+
+    hash_ = hash;
+    levels_.clear();
+
+    // Construct the Merkle tree hashes.
+    size_t level_size = entries_.size();
+    Level level0;
+    level0.reserve(level_size);
+    for (const Entry &entry : entries_) {
+      level0.push_back(HashLeaf(entry));
+    }
+    levels_.push_back(std::move(level0));
+    level_size /= 2;
+
+    for (; level_size > 0; level_size /= 2) {
+      Level level;
+      level.reserve(level_size);
+
+      const Level &prev_level = levels_.back();
+      for (size_t i = 0; i < level_size; ++i) {
+        level.push_back(HashNodes(prev_level[2 * i], prev_level[2 * i + 1]));
+      }
+      levels_.push_back(std::move(level));
+    }
+  }
+
+  const Hash &GetEntryHash(uint64_t index) const {
+    return GetHashAtLevel(index, 0);
+  }
+
+  // Returns a bogus hash value that is the right length for the hash algorithm
+  // consisting of the given byte.
+  Hash GetBogusHash(uint8_t byte = 0xff) const {
+    return Hash(EVP_MD_size(hash_), byte);
+  }
+
+  Hash GetSubtreeHash(uint64_t subtree_start, uint64_t subtree_end) const {
+    Subtree subtree{subtree_start, subtree_end};
+    return GetSubtreeHash(subtree);
+  }
+
+  // Returns a subtree inclusion proof for entry `index` within the subtree
+  // [`subtree_start`, `subtree_end`). The inclusion proof consists of the
+  // entry's "neighbor" at each level of the tree. The entry hash, together with
+  // the hashes of each element of the inclusion proof, must allow
+  // reconstruction of the subtree hash.
+  std::vector<Hash> GenerateSubtreeInclusionProof(uint64_t index,
+                                                  uint64_t subtree_start,
+                                                  uint64_t subtree_end) const {
+    Subtree subtree{subtree_start, subtree_end};
+    EXPECT_LE(subtree.start, index);
+    EXPECT_LE(index, subtree.end - 1);
+    std::vector<Hash> proof;
+    // `covered` tracks the subrange of `subtree` for which the in-progress
+    // inclusion proof includes sufficient information to reconstruct the hash.
+    Subtree covered{index, index + 1};
+
+    // Walk up the tree (from leaves to root), determine whether the entry
+    // is contained in the left or right child at that level, and collect the
+    // other one as the "neighbor".
+    uint64_t level_num = 0;
+    while (covered != subtree) {
+      bool is_right_child_of_parent = (covered.start >> level_num) % 2;
+      if (is_right_child_of_parent) {
+        // A left child that has a sibling to its right must be complete, so
+        // this left neighbor must be a complete subtree.
+        Subtree neighbor_left{
+            /*start=*/covered.start ^ (uint64_t{1} << level_num),
+            /*end=*/covered.start};
+        proof.emplace_back(GetSubtreeHash(neighbor_left));
+        covered.start = neighbor_left.start;
+      } else {
+        // A neighbor on the right may be a partial subtree on the right edge of
+        // `subtree` if not all of its would-be entries are present.
+        Subtree neighbor_right{/*start=*/covered.end,
+                               /*end=*/covered.end + covered.size()};
+        if (neighbor_right.end > subtree.end) {
+          neighbor_right.end = subtree.end;
+        }
+        // Omit the right neighbor if it's entirely empty.
+        if (neighbor_right.size() > 0) {
+          proof.emplace_back(GetSubtreeHash(neighbor_right));
+        }
+        covered.end = neighbor_right.end;
+      }
+      ++level_num;
+    }
+    return proof;
+  }
+
+  // Returns a subtree inclusion proof as a concatenated series of subtree
+  // hashes.
+  std::vector<uint8_t> GetSerializedSubtreeInclusionProof(
+      uint64_t index, uint64_t subtree_start, uint64_t subtree_end) const {
+    auto inclusion_proof =
+        GenerateSubtreeInclusionProof(index, subtree_start, subtree_end);
+    return ConcatenateHashes(inclusion_proof);
+  }
+
+  std::vector<uint8_t> ConcatenateHashes(
+      const std::vector<Hash> &hashes) const {
+    std::vector<uint8_t> ret;
+    ret.reserve(EVP_MD_size(hash_) * hashes.size());
+    for (const Hash &hash : hashes) {
+      ret.insert(ret.end(), hash.begin(), hash.end());
+    }
+    return ret;
+  }
+
+  void ExhaustivelyEvaluateInclusionProofs() const {
+    for (uint64_t end = 0; end < limit_; ++end) {
+      for (uint64_t start = 0; start < end + 1; ++start) {
+        if (!IsValidSubtree(start, end)) {
+          continue;
+        }
+        auto subtree_hash = GetSubtreeHash(start, end);
+        for (uint64_t index = start; index < end; ++index) {
+          SCOPED_TRACE("subtree: [" + std::to_string(start) + ", " +
+                       std::to_string(end) +
+                       "), index: " + std::to_string(index));
+          std::vector<uint8_t> proof =
+              GetSerializedSubtreeInclusionProof(index, start, end);
+
+          std::vector<uint8_t> evaluated_subtree_hash;
+          evaluated_subtree_hash.resize(EVP_MD_size(hash_));
+          bool success = x509_evaluate_mtc_subtree_inclusion_proof(
+              Span(evaluated_subtree_hash), hash(), proof, index,
+              GetEntryHash(index), start, end);
+          EXPECT_TRUE(success);
+          EXPECT_EQ(Bytes(evaluated_subtree_hash), Bytes(subtree_hash));
+        }
+      }
+    }
+  }
+
+  uint64_t max_end_index() const {
+    return static_cast<uint64_t>(entries_.size());
+  }
+
+  const EVP_MD *hash() const { return hash_; }
+
+ private:
+  // This struct allows arbitrary `start` and `end` values that may not form a
+  // valid subtree; caller should ensure they are valid by construction if using
+  // as a subtree in further computations.
+  struct Subtree {
+    uint64_t start = 0u;
+    uint64_t end = 0u;
+
+    size_t size() const { return end - start; }
+
+    bool operator==(const Subtree &other) const {
+      return (start == other.start) && (end == other.end);
+    }
+    bool operator!=(const Subtree &other) const { return !(*this == other); }
+  };
+
+  static bool IsPow2(uint64_t n) { return CRYPTO_has_single_bit(n); }
+
+  // Returns a number containing the longest shared prefix in the binary
+  // representations of `a` and `b`, with all other less-significant bits
+  // zeroed.
+  static uint64_t LongestSharedBitPrefix(uint64_t a, uint64_t b) {
+    uint64_t suffix_bits = CRYPTO_bit_width(a ^ b);
+    if (suffix_bits == 64) {
+      return 0;
+    }
+    uint64_t mask = ~uint64_t{0} << suffix_bits;
+    return a & mask;
+  }
+
+  // Returns the nearest (aligned) subtree that completely contains the interval
+  // [start, end). In other words, this finds the lowest common ancestor of
+  // `start` and `end - 1` in the original tree. The returned subtree may
+  // include additional elements before `start`.
+  static Subtree GetCoveringSubtree(uint64_t start, uint64_t end) {
+    return Subtree{LongestSharedBitPrefix(start, end - 1), end};
+  }
+
+  // Computes the hash for `subtree`, which may be a partial subtree with some
+  // levels skipped on the right edge.
+  Hash GetSubtreeHash(Subtree subtree) const {
+    if (subtree.size() == 0) {
+      return HashData({});
+    }
+    uint64_t level_num = 0;
+    uint64_t start = subtree.start;
+    uint64_t last = subtree.end - 1;
+    // Start at the largest complete subtree on the right edge.
+    while (start < last && (last & 1) == 1) {
+      ++level_num;
+      start >>= 1;
+      last >>= 1;
+    }
+    // As we iterate upwards along the right edge until we cover the whole
+    // desired subtree, `hash` is the subtree hash for [last << level_num, end).
+    Hash hash = levels_[level_num][last];
+    while (start < last) {
+      // Don't modify the hash if this level is skipped.
+      if (last & 1) {
+        hash = HashNodes(levels_[level_num][last - 1], hash);
+      }
+      ++level_num;
+      start >>= 1;
+      last >>= 1;
+    }
+    return hash;
+  }
+
+  Hash HashData(std::initializer_list<Span<const uint8_t>> data) const {
+    Hash ret;
+    ret.resize(EVP_MD_size(hash_));
+    ScopedEVP_MD_CTX ctx;
+    EVP_DigestInit_ex(ctx.get(), hash_, nullptr);
+    for (const Span<const uint8_t> &piece : data) {
+      EVP_DigestUpdate(ctx.get(), piece.data(), piece.size());
+    }
+    EVP_DigestFinal_ex(ctx.get(), ret.data(), nullptr);
+    return ret;
+  }
+
+  Hash HashLeaf(Span<const uint8_t> leaf_data) const {
+    return HashData({std::vector<uint8_t>({0x00}), leaf_data});
+  }
+
+  Hash HashNodes(Span<const uint8_t> left_data,
+                 Span<const uint8_t> right_data) const {
+    return HashData({std::vector<uint8_t>({0x01}), left_data, right_data});
+  }
+
+  // Returns the hash containing the entry at `index` at the given level in the
+  // full Merkle tree.
+  const Hash &GetHashAtLevel(uint64_t index, uint64_t level_num) const {
+    const Level &level = levels_[level_num];
+    return level[index >> level_num];
+  }
+
+  const EVP_MD *hash_ = nullptr;
+  size_t limit_ = 0u;
+  // Entries (leaf nodes) for the test tree.
+  std::vector<Entry> entries_;
+  // Each element of `levels_` contains the Merkle tree hashes for nodes at a
+  // given level in the tree, counting from the bottom. `levels_[0]` contains
+  // all the leaf node hashes, `levels_[1]` contains half as many hashes each
+  // covering 2 leaf nodes, etc. In general, `levels_[i]` contains hashes each
+  // covering 2^i entries. Each `levels_[i][j]` contains the hash value
+  // MTH(D[ (2^i) * j : (2^i) * (j+1) ]), representing a subtree
+  // [ (2^i) * j : (2^i) * (j+1) ) of size 2^i.
+  std::vector<Level> levels_;
+};
+
+// Helper to format bytes as hex.
+std::string ToHexStr(const std::vector<uint8_t> &bytes) {
+  std::stringstream hex;
+  hex << std::hex << std::setfill('0');
+  for (uint8_t b : bytes) {
+    hex << std::setw(2) << static_cast<int>(b);
+  }
+  return hex.str();
+}
+
+// This executes the "accumulated" Subtree Hashes test from appendix C.1 of
+// draft-ietf-plants-merkle-tree-certs. (This is more a test of the
+// X509MerkleTreeTest harness, to ensure that it is able to correctly test
+// the production code.)
+TEST_F(X509MerkleTreeTest, AccumulatedSubtreeHashes) {
+  ASSERT_NO_FATAL_FAILURE(InitTestMerkleTree(EVP_sha256(), 256));
+
+  ScopedEVP_MD_CTX ctx;
+  EVP_DigestInit_ex(ctx.get(), hash(), nullptr);
+
+  for (uint64_t end = 0; end < 131; ++end) {
+    for (uint64_t start = 0; start < end + 1; ++start) {
+      if (!IsValidSubtree(start, end)) {
+        continue;
+      }
+      std::stringstream ss;
+      ss << "[" << std::to_string(start) << ", " << std::to_string(end) << ") "
+         << ToHexStr(GetSubtreeHash(start, end)) << "\n";
+      std::string str = ss.str();
+      EVP_DigestUpdate(ctx.get(), str.data(), str.size());
+    }
+  }
+  std::vector<uint8_t> final(EVP_MAX_MD_SIZE);
+  unsigned final_size;
+  EVP_DigestFinal_ex(ctx.get(), final.data(), &final_size);
+  final.resize(final_size);
+
+  const uint8_t kExpected[] = {
+      0xb8, 0x28, 0x06, 0xad, 0x42, 0x65, 0xbb, 0x15, 0x1c, 0x11, 0x19,
+      0xc0, 0xf4, 0xdb, 0x43, 0x7b, 0xb4, 0xd1, 0xa1, 0xf8, 0x87, 0xb3,
+      0xa7, 0xfb, 0xa1, 0xcd, 0x4e, 0xbf, 0x55, 0x2e, 0x3e, 0x81,
+  };
+  EXPECT_EQ(Bytes(final), Bytes(kExpected));
+}
+
+// This executes the "accumulated" Subtree Inclusion Proofs test from appendix
+// C.2 of draft-ietf-plants-merkle-tree-certs. (This is more a test of the
+// X509MerkleTreeTest harness, to ensure that it is able to correctly test
+// the production code.)
+TEST_F(X509MerkleTreeTest, AccumulatedSubtreeInclusionProofs) {
+  ASSERT_NO_FATAL_FAILURE(InitTestMerkleTree(EVP_sha256(), 256));
+
+  ScopedEVP_MD_CTX ctx;
+  EVP_DigestInit_ex(ctx.get(), hash(), nullptr);
+
+  for (uint64_t end = 0; end < 131; ++end) {
+    for (uint64_t start = 0; start < end + 1; ++start) {
+      if (!IsValidSubtree(start, end)) {
+        continue;
+      }
+      for (uint64_t index = start; index < end; ++index) {
+        std::stringstream ss;
+        ss << std::to_string(index) << " [" << std::to_string(start) << ", "
+           << std::to_string(end) << ")";
+        for (const Hash &hash :
+             GenerateSubtreeInclusionProof(index, start, end)) {
+          ss << " " << ToHexStr(hash);
+        }
+        ss << "\n";
+        std::string str = ss.str();
+        EVP_DigestUpdate(ctx.get(), str.data(), str.size());
+      }
+    }
+  }
+  std::vector<uint8_t> final(EVP_MAX_MD_SIZE);
+  unsigned final_size;
+  EVP_DigestFinal_ex(ctx.get(), final.data(), &final_size);
+  final.resize(final_size);
+
+  const uint8_t kExpected[] = {
+      0xac, 0x2a, 0x8f, 0x98, 0x9e, 0x44, 0xd9, 0x9e, 0x39, 0x9d, 0xb4,
+      0x48, 0x05, 0x0f, 0xf5, 0xf1, 0x97, 0x57, 0xdf, 0x53, 0xcf, 0xb7,
+      0x16, 0xaa, 0x81, 0x01, 0x5d, 0x39, 0x55, 0xd8, 0x16, 0x3f,
+  };
+  EXPECT_EQ(Bytes(final), Bytes(kExpected));
+}
+
+TEST_F(X509MerkleTreeTest, EvaluateInclusionProof) {
+  ASSERT_NO_FATAL_FAILURE(InitTestMerkleTree(EVP_sha256(), 256));
+  ExhaustivelyEvaluateInclusionProofs();
+}
+
+TEST_F(X509MerkleTreeTest, EvaluateInclusionProofInvalidParams) {
+  const struct {
+    uint64_t index;
+    uint64_t start;
+    uint64_t end;
+  } kInvalidCases[] = {
+      // Start is greater than end.
+      {1, 1, 0},
+      // Subtree is misaligned.
+      {1, 1, 5},
+      // Subtree is misaligned. This tests the uint64_t overflow condition for
+      // valid subtrees that differ in the most significant bit.
+      // TODO(crbug.com/503746594): There should also be a test for the valid
+      // case (start = 0), but that would currently require initializing an
+      // overly large test Merkle Tree, so it is omitted.
+      {1, 1, ~uint64_t{0}},
+      // Index is not in range.
+      {0, 1, 2},
+      // Index is past-the-end.
+      {1, 1, 1},
+  };
+
+  Hash bogus = GetBogusHash();
+
+  std::vector<uint8_t> evaluated_subtree_hash;
+  evaluated_subtree_hash.resize(EVP_MD_size(hash()));
+  for (const auto &t : kInvalidCases) {
+    // Try every length of fake inclusion proof to make sure the call fails
+    // due to invalid params, rather than inclusion proof of the wrong length.
+    Hash fake_inclusion_proof;
+    for (size_t n = 0; n <= 64; ++n) {
+      EXPECT_FALSE(x509_evaluate_mtc_subtree_inclusion_proof(
+          Span(evaluated_subtree_hash), hash(), Span(fake_inclusion_proof),
+          t.index, GetEntryHash(t.index), t.start, t.end));
+      fake_inclusion_proof.insert(fake_inclusion_proof.end(), bogus.begin(),
+                                  bogus.end());
+    }
+  }
+}
+
+TEST_F(X509MerkleTreeTest, EvaluateInclusionProofBadOutputSize) {
+  uint64_t index = 1;
+  uint64_t start = 0;
+  uint64_t end = 3;
+
+  std::vector<uint8_t> evaluated_subtree_hash;
+  EXPECT_FALSE(x509_evaluate_mtc_subtree_inclusion_proof(
+      Span(evaluated_subtree_hash), hash(),
+      GetSerializedSubtreeInclusionProof(index, start, end), index,
+      GetEntryHash(index), start, end));
+
+  evaluated_subtree_hash.resize(EVP_MD_size(hash()) - 1);
+  EXPECT_FALSE(x509_evaluate_mtc_subtree_inclusion_proof(
+      Span(evaluated_subtree_hash), hash(),
+      GetSerializedSubtreeInclusionProof(index, start, end), index,
+      GetEntryHash(index), start, end));
+
+  evaluated_subtree_hash.resize(EVP_MD_size(hash()) + 1);
+  EXPECT_FALSE(x509_evaluate_mtc_subtree_inclusion_proof(
+      Span(evaluated_subtree_hash), hash(),
+      GetSerializedSubtreeInclusionProof(index, start, end), index,
+      GetEntryHash(index), start, end));
+}
+
+TEST_F(X509MerkleTreeTest, EvaluateInclusionProofBadEntryHashSize) {
+  uint64_t index = 1;
+  uint64_t start = 0;
+  uint64_t end = 3;
+
+  std::vector<uint8_t> evaluated_subtree_hash;
+  evaluated_subtree_hash.resize(EVP_MD_size(hash()));
+
+  Hash input = GetEntryHash(index);
+  input.push_back(0x12);
+
+  EXPECT_FALSE(x509_evaluate_mtc_subtree_inclusion_proof(
+      Span(evaluated_subtree_hash), hash(),
+      GetSerializedSubtreeInclusionProof(index, start, end), index, input,
+      start, end));
+
+  input.pop_back();
+  input.pop_back();
+  EXPECT_FALSE(x509_evaluate_mtc_subtree_inclusion_proof(
+      Span(evaluated_subtree_hash), hash(),
+      GetSerializedSubtreeInclusionProof(index, start, end), index, input,
+      start, end));
+}
+
+TEST_F(X509MerkleTreeTest, EvaluateInclusionProofWrong) {
+  // For entry 10 in a subtree [8, 13), the correct inclusion proof contains
+  // MTH({d[11]}), MTH(D[8:10]), and MTH({d[12]}).
+  const uint64_t index = 10;
+  const uint64_t subtree_start = 8;
+  const uint64_t subtree_end = 13;
+  const struct {
+    std::vector<uint8_t> proof;
+    Hash entry_hash;
+    // Whether the inclusion proof evaluation procedure should succeed.
+    bool should_succeed = false;
+    // Whether the result of inclusion proof evaluation should match the correct
+    // subtree hash.
+    bool should_match = false;
+  } kTestCases[] = {
+      {
+          // Correct proof.
+          ConcatenateHashes({GetSubtreeHash(11, 12), GetSubtreeHash(8, 10),
+                             GetSubtreeHash(12, 13)}),
+          GetEntryHash(index),
+          /*should_succeed=*/true,
+          /*should_match=*/true,
+      },
+      {
+          // Inclusion proof incorrectly includes the entry hash itself.
+          ConcatenateHashes({GetEntryHash(10), GetSubtreeHash(11, 12),
+                             GetSubtreeHash(8, 10), GetSubtreeHash(12, 13)}),
+          GetEntryHash(index),
+      },
+      {
+          // Inclusion proof incorrectly omits the final subtree hash covering
+          // the right edge.
+          ConcatenateHashes({GetSubtreeHash(11, 12), GetSubtreeHash(8, 10)}),
+          GetEntryHash(index),
+      },
+      {
+          // Inclusion proof incorrectly omits the level-0 hash.
+          ConcatenateHashes({GetSubtreeHash(8, 10), GetSubtreeHash(12, 13)}),
+          GetEntryHash(index),
+      },
+      {
+          // Inclusion proof incorrectly includes the level-1 hash for the entry
+          // instead of the neighboring level-0 hash.
+          ConcatenateHashes({GetSubtreeHash(10, 12), GetSubtreeHash(8, 10),
+                             GetSubtreeHash(12, 13)}),
+          GetEntryHash(index),
+          /*should_succeed=*/true,
+          /*should_match=*/false,
+      },
+      {
+          // Individual hash in the inclusion proof are corrupted.
+          ConcatenateHashes({GetBogusHash(0x01), GetSubtreeHash(8, 10),
+                             GetSubtreeHash(12, 13)}),
+          GetEntryHash(index),
+          /*should_succeed=*/true,
+          /*should_match=*/false,
+      },
+      {
+          // Individual hash in the inclusion proof are corrupted.
+          ConcatenateHashes(
+              {GetBogusHash(0x01), GetSubtreeHash(8, 10), GetBogusHash(0x02)}),
+          GetEntryHash(index),
+          /*should_succeed=*/true,
+          /*should_match=*/false,
+      },
+      {
+          // Incorrect entry hash.
+          ConcatenateHashes({GetSubtreeHash(11, 12), GetSubtreeHash(8, 10),
+                             GetSubtreeHash(12, 13)}),
+          GetBogusHash(),
+          /*should_succeed=*/true,
+          /*should_match=*/false,
+      },
+      {
+          // Inclusion proof includes an extra hash.
+          ConcatenateHashes({GetSubtreeHash(11, 12), GetSubtreeHash(8, 10),
+                             GetSubtreeHash(12, 13), GetSubtreeHash(12, 13)}),
+          GetEntryHash(index),
+      },
+      {
+          // Inclusion proof contains trailing data.
+          ConcatenateHashes({GetSubtreeHash(11, 12),
+                             GetSubtreeHash(8, 10),
+                             GetSubtreeHash(12, 13),
+                             {0x01, 0x02}}),
+          GetEntryHash(index),
+      },
+      {
+          // Inclusion proof is truncated.
+          [](std::vector<uint8_t> v) -> std::vector<uint8_t> {
+            v.pop_back();
+            return v;
+          }(ConcatenateHashes({GetSubtreeHash(11, 12), GetSubtreeHash(8, 10),
+                                     GetSubtreeHash(12, 13)})),
+          GetEntryHash(index),
+      },
+  };
+  for (size_t i = 0; i < std::size(kTestCases); ++i) {
+    SCOPED_TRACE(i);
+    const auto &t = kTestCases[i];
+    std::vector<uint8_t> evaluated_subtree_hash;
+    evaluated_subtree_hash.resize(EVP_MD_size(hash()));
+    bool success = x509_evaluate_mtc_subtree_inclusion_proof(
+        Span(evaluated_subtree_hash), hash(), t.proof, index, t.entry_hash,
+        subtree_start, subtree_end);
+    EXPECT_EQ(success, t.should_succeed);
+    if (success) {
+      if (t.should_match) {
+        EXPECT_EQ(Bytes(evaluated_subtree_hash),
+                  Bytes(GetSubtreeHash(subtree_start, subtree_end)));
+      } else {
+        EXPECT_NE(Bytes(evaluated_subtree_hash),
+                  Bytes(GetSubtreeHash(subtree_start, subtree_end)));
+      }
+    }
+  }
+}
+
+TEST_F(X509MerkleTreeTest, EvaluateInclusionProofLarge) {
+  ASSERT_NO_FATAL_FAILURE(InitTestMerkleTree(EVP_sha256(), uint64_t{1 << 16}));
+  const uint64_t subtree_start = 0;
+  const uint64_t subtree_end = max_end_index();
+  auto subtree_hash = GetSubtreeHash(subtree_start, subtree_end);
+  const uint64_t nums[] = {0, 1, max_end_index() / 2};
+  for (uint64_t num : nums) {
+    for (uint64_t index : {num, max_end_index() - 1 - num}) {
+      SCOPED_TRACE(index);
+      std::vector<uint8_t> proof =
+          GetSerializedSubtreeInclusionProof(index, subtree_start, subtree_end);
+
+      std::vector<uint8_t> evaluated_subtree_hash;
+      evaluated_subtree_hash.resize(EVP_MD_size(hash()));
+      bool success = x509_evaluate_mtc_subtree_inclusion_proof(
+          Span(evaluated_subtree_hash), hash(), proof, index,
+          GetEntryHash(index), subtree_start, subtree_end);
+      ASSERT_TRUE(success);
+      EXPECT_EQ(Bytes(evaluated_subtree_hash), Bytes(subtree_hash));
+    }
+  }
+}
+
+TEST_F(X509MerkleTreeTest, EvaluateInclusionProofDifferentHash) {
+  InitTestMerkleTree(EVP_sha384(), 256);
+  ExhaustivelyEvaluateInclusionProofs();
+}
+
+#endif  // !defined (BORINGSSL_SHARED_LIBRARY)
 
 }  // namespace
 BSSL_NAMESPACE_END

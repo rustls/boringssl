@@ -523,6 +523,7 @@ set(
   crypto/x509/x509_def.cc
   crypto/x509/x509_ext.cc
   crypto/x509/x509_lu.cc
+  crypto/x509/x509_mtc.cc
   crypto/x509/x509_obj.cc
   crypto/x509/x509_req.cc
   crypto/x509/x509_set.cc
