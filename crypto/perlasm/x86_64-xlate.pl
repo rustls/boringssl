@@ -130,7 +130,7 @@ my %globals;
 		$self->{sz} = $2;
 	    } elsif ($self->{op} =~ /call|jmp|^rdrand$/) {
 		$self->{sz} = "";
-	    } elsif ($self->{op} =~ /^p/ && $' !~ /^(ush|op|insrw)/) { # SSEn
+	    } elsif ($self->{op} =~ /^p/ && $' !~ /^(ush|op|insrw|ext[ql]?$|dep[ql]?$)/) { # SSEn
 		$self->{sz} = "";
 	    } elsif ($self->{op} =~ /^[vk]/) { # VEX or k* such as kmov
 		$self->{sz} = "";
