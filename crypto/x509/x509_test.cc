@@ -10671,6 +10671,75 @@ TEST(X509Test, PathLenSelfIssuedNotCountedButStillVerified) {
                          {/*self_issued=*/true, /*pathlen=*/1}}));
 }
 
+#if !defined(BORINGSSL_SHARED_LIBRARY)
+TEST(X509Test, MarshalTBSCertCached) {
+  UniquePtr<X509> cert = CertFromPEM(kLeafPEM);
+  ASSERT_TRUE(cert);
+
+  ScopedCBB cbb;
+  ASSERT_TRUE(CBB_init(cbb.get(), 64));
+  EXPECT_TRUE(x509_marshal_tbs_cert(cbb.get(), cert.get()));
+
+  CBS tbs;
+  Array<uint8_t> scratch;
+  EXPECT_TRUE(x509_get_or_marshal_tbs_cert(&tbs, &scratch, cert.get()));
+
+  // The non-copying and copying helper should return identical data.
+  EXPECT_EQ(Bytes(CBS_data(&tbs), CBS_len(&tbs)),
+            Bytes(CBB_data(cbb.get()), CBB_len(cbb.get())));
+
+  // Check that the non-copying helper returned data within the CRYPTO_BUFFER.
+  auto *impl = FromOpaque(cert.get());
+  ASSERT_TRUE(impl->buf);
+  const uint8_t *buf_data = CRYPTO_BUFFER_data(impl->buf.get());
+  size_t buf_len = CRYPTO_BUFFER_len(impl->buf.get());
+  EXPECT_GE(CBS_data(&tbs), buf_data);
+  EXPECT_LE(CBS_data(&tbs) + CBS_len(&tbs), buf_data + buf_len);
+}
+
+TEST(X509Test, MarshalTBSCertNoCache) {
+  // Create a programmatically constructed certificate (no cached TBSCert).
+  UniquePtr<EVP_PKEY> pkey(PrivateKeyFromPEM(kRSAKey));
+  ASSERT_TRUE(pkey);
+
+  UniquePtr<X509> cert(X509_new());
+  ASSERT_TRUE(cert);
+
+  EXPECT_TRUE(X509_set_version(cert.get(), X509_VERSION_3));
+  EXPECT_TRUE(ASN1_INTEGER_set_int64(X509_get_serialNumber(cert.get()), 1));
+  EXPECT_TRUE(X509_gmtime_adj(X509_getm_notBefore(cert.get()), 0));
+  EXPECT_TRUE(X509_gmtime_adj(X509_getm_notAfter(cert.get()), 60 * 60 * 24));
+  X509_NAME *subject = X509_get_subject_name(cert.get());
+  ASSERT_TRUE(X509_NAME_add_entry_by_txt(
+      subject, "CN", MBSTRING_ASC, reinterpret_cast<const uint8_t *>("Test"),
+      -1, -1, 0));
+  EXPECT_TRUE(X509_set_issuer_name(cert.get(), subject));
+  EXPECT_TRUE(X509_set_pubkey(cert.get(), pkey.get()));
+
+  UniquePtr<X509_ALGOR> algor(X509_ALGOR_new());
+  ASSERT_TRUE(algor);
+  ASSERT_TRUE(X509_ALGOR_set0(algor.get(),
+                              OBJ_nid2obj(NID_sha256WithRSAEncryption),
+                              V_ASN1_NULL, nullptr));
+  ASSERT_TRUE(X509_set1_signature_algo(cert.get(), algor.get()));
+
+  // There is no cached encoding to return.
+  ASSERT_FALSE(FromOpaque(cert.get())->buf);
+
+  ScopedCBB cbb;
+  ASSERT_TRUE(CBB_init(cbb.get(), 64));
+  EXPECT_TRUE(x509_marshal_tbs_cert(cbb.get(), cert.get()));
+
+  CBS tbs;
+  Array<uint8_t> scratch;
+  EXPECT_TRUE(x509_get_or_marshal_tbs_cert(&tbs, &scratch, cert.get()));
+
+  // Both helpers should return identical data.
+  EXPECT_EQ(Bytes(CBS_data(&tbs), CBS_len(&tbs)),
+            Bytes(CBB_data(cbb.get()), CBB_len(cbb.get())));
+}
+#endif  // !defined(BORINGSSL_SHARED_LIBRARY)
+
 // Tests for `x509_evaluate_mtc_subtree_inclusion_proof`, which is an
 // internal-only function.
 #if !defined(BORINGSSL_SHARED_LIBRARY)

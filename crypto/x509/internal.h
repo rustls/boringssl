@@ -189,7 +189,19 @@ class X509Impl : public x509_st, public RefCounted<X509Impl> {
   ~X509Impl();
 } /* X509 */;
 
+// x509_marshal_tbs_cert sets `cbb` to the serialized TBSCertificate of `x509`.
+// It either replays the saved TBSCertificate encoding from the `CRYPTO_BUFFER`,
+// or marshals the TBSCertificate from fields set on `x509`. It returns one on
+// success or zero on error.
 int x509_marshal_tbs_cert(CBB *cbb, const X509 *x509);
+
+// x509_get_or_marshal_tbs_cert sets `out` to the serialized TBSCertificate of
+// `x509`. If possible, it gets the saved TBSCertificate encoding from the
+// `CRYPTO_BUFFER` of `x509`, otherwise it marshals the TBSCertificate from
+// fields set on `x509` into `scratch`. It returns one on success or zero on
+// error.
+int x509_get_or_marshal_tbs_cert(CBS *out, Array<uint8_t> *scratch,
+                                 const X509 *x509);
 
 // X509 is an `ASN1_ITEM` whose ASN.1 type is X.509 Certificate (RFC 5280) and C
 // type is `X509*`.
