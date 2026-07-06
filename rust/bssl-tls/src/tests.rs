@@ -53,6 +53,7 @@ use bssl_x509::{
 };
 use futures::future::join;
 
+mod alpn;
 mod credentials;
 mod datagram;
 mod handshake;

@@ -44,6 +44,7 @@ use crate::{
     sessions::TlsSession, //
 };
 
+mod alpn;
 mod credentials;
 pub mod io;
 pub mod lifecycle;

@@ -112,6 +112,8 @@ pub enum ConfigurationError {
     InvalidIp,
     /// Invalid parameters.
     InvalidParameters,
+    /// Invalid ALPN protocols.
+    InvalidAlpnProtocols,
 }
 
 impl core::fmt::Display for ConfigurationError {
@@ -129,6 +131,7 @@ impl core::fmt::Display for ConfigurationError {
             ConfigurationError::ValueOutOfRange => f.write_str("value is out of range"),
             ConfigurationError::InvalidIp => f.write_str("invalid IP address"),
             ConfigurationError::InvalidParameters => f.write_str("invalid parameters"),
+            ConfigurationError::InvalidAlpnProtocols => f.write_str("invalid ALPN protocols"),
         }
     }
 }
