@@ -19,7 +19,6 @@ use core::{
         c_long,
         c_void, //
     },
-    marker::PhantomData,
     ptr::{
         NonNull,
         null_mut, //
@@ -30,6 +29,7 @@ use core::{
 use once_cell::sync::Lazy;
 
 use crate::{
+    CertCallback,
     HandshakeCompleteMethods,
     Methods,
     MethodsRef,
@@ -52,6 +52,10 @@ use crate::{
             complete,
             decrypt,
             sign, //
+        },
+        select_cert::{
+            ClientCertificateSelector,
+            ServerCertificateSelector, //
         }, //
     },
     errors::TlsRetryReason,
@@ -69,9 +73,12 @@ pub(super) struct RustConnectionMethods<Mode> {
     pub verify_certificate_methods: Option<Box<dyn VerifyCertificate>>,
     /// Handshake-complete callback.
     pub handshake_complete: Option<Box<dyn super::lifecycle::HandshakeComplete>>,
+    pub server_cert_cb: Option<Box<dyn ServerCertificateSelector<Mode>>>,
+    pub client_cert_cb: Option<Box<dyn ClientCertificateSelector<Mode>>>,
+    pub server_cert_cb_installed: bool,
+    pub client_cert_cb_installed: bool,
     /// A mailbox to propagate IO retrying reasons.
     pub pending_reason: Option<TlsRetryReason>,
-    _p: PhantomData<fn() -> Mode>,
 }
 
 impl<M> RustConnectionMethods<M> {
@@ -81,8 +88,11 @@ impl<M> RustConnectionMethods<M> {
             private_key_delegate: None,
             verify_certificate_methods: None,
             handshake_complete: None,
+            server_cert_cb: None,
+            client_cert_cb: None,
+            server_cert_cb_installed: false,
+            client_cert_cb_installed: false,
             pending_reason: None,
-            _p: PhantomData,
         }
     }
 
@@ -150,6 +160,16 @@ impl<M: HasTlsConnectionMethod> HandshakeCompleteMethods for RustConnectionMetho
         &mut self,
     ) -> Option<Box<dyn super::lifecycle::HandshakeComplete>> {
         self.handshake_complete.take()
+    }
+}
+
+impl<M: HasTlsConnectionMethod> CertCallback<M> for RustConnectionMethods<M> {
+    fn server_cert_cb(&self) -> Option<&(dyn ServerCertificateSelector<M> + 'static)> {
+        self.server_cert_cb.as_deref()
+    }
+
+    fn client_cert_cb(&self) -> Option<&(dyn ClientCertificateSelector<M> + 'static)> {
+        self.client_cert_cb.as_deref()
     }
 }
 

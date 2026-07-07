@@ -53,6 +53,11 @@ use bssl_x509::{
 };
 use futures::future::join;
 
+mod credentials;
+mod datagram;
+mod handshake;
+mod transport;
+
 pub(crate) const CA: &[u8] = include_bytes!("../../test-data/BoringSSLCATest.crt");
 pub(crate) const RSA_SERVER_CERT: &[u8] =
     include_bytes!("../../test-data/BoringSSLServerTest-RSA.crt");
@@ -65,10 +70,17 @@ pub(crate) const P256_SERVER_KEY: &[u8] =
 pub(crate) const P256_SERVER_KEY_DER: &[u8] =
     include_bytes!("../../test-data/BoringSSLServerTest-ECDSA-P256.der");
 
-mod credentials;
-mod datagram;
-mod handshake;
-mod transport;
+// DER-encoded DistinguishedName representing "CN=TestCA".
+// Can be verified using:
+// echo -n "3011310f300d06035504031306546573744341" | xxd -r -p | openssl asn1parse -inform DER
+//
+// Output:
+//   0:d=0  hl=2 l=  17 cons: SEQUENCE
+//   2:d=1  hl=2 l=  15 cons: SET
+//   4:d=2  hl=2 l=  13 cons: SEQUENCE
+//   6:d=3  hl=2 l=   3 prim: OBJECT            :commonName
+//  11:d=3  hl=2 l=   6 prim: PRINTABLESTRING   :TestCA
+pub(crate) const TEST_CA_DN: &[u8] = b"\x30\x11\x31\x0f\x30\x0d\x06\x03\x55\x04\x03\x13\x06TestCA";
 
 /// Dumb server-client pair that does no certificate verification.
 fn dumb_server_client() -> Result<(TlsConnection<Server>, TlsConnection<Client>), Error> {
@@ -388,6 +400,30 @@ pub(crate) fn load_trust_store(trust: Trust) -> X509Store {
         .add_cert(X509Certificate::parse_one_from_pem(CA).unwrap())
         .unwrap();
     cert_store.build()
+}
+
+/// Runs an async TLS handshake between a client and server connection using mock
+/// pipe IO. Returns `Ok(())` on successful handshake.
+pub(crate) fn run_async_handshake(
+    mut client_conn: TlsConnection<Client>,
+    mut server_conn: TlsConnection<Server>,
+) -> Result<(), Error> {
+    let (client_socket, server_socket, mut executor) = create_mock_pipe();
+    client_conn.set_io(client_socket)?;
+    server_conn.set_io(server_socket)?;
+
+    executor.run(async {
+        let client_handshake = async {
+            assert!(client_conn.async_handshake().await?.is_none());
+            Ok::<(), Error>(())
+        };
+        let server_handshake = async {
+            assert!(server_conn.async_handshake().await?.is_none());
+            Ok::<(), Error>(())
+        };
+        futures::future::try_join(client_handshake, server_handshake).await?;
+        Ok::<(), Error>(())
+    })
 }
 
 #[test]

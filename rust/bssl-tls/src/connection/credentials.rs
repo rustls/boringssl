@@ -18,10 +18,7 @@ use alloc::{
 };
 use core::{
     ffi::CStr,
-    ptr::{
-        NonNull,
-        null, //
-    }, //
+    ptr::null, //
 };
 
 use bssl_x509::{
@@ -52,7 +49,14 @@ use crate::{
         SignatureAlgorithm,
         TlsCredential,
         VerifyCertificate,
-        cert_cb, //
+        cert_cb,
+        get_peer_certificate_type,
+        get_peer_raw_public_key,
+        select_cert::{
+            ClientCertificateSelector,
+            ServerCertificateSelector,
+            select_cert_cb, //
+        }, //
     },
     errors::Error,
     ffi::slice_into_ffi_raw_parts,
@@ -179,6 +183,38 @@ where
     }
 }
 
+/// # Select certificate - Server
+impl<M> TlsConnectionBuilder<Server, M>
+where
+    M: HasTlsConnectionMethod,
+{
+    /// Set certificate selection callback on **server** side.
+    pub fn with_server_side_certificate_callback<T: 'static + ServerCertificateSelector<M>>(
+        &mut self,
+        cb: Option<T>,
+    ) -> &mut Self {
+        self.as_in_handshake()
+            .set_server_side_certificate_callback(cb);
+        self
+    }
+}
+
+/// # Select certificate - Client
+impl<M> TlsConnectionBuilder<Client, M>
+where
+    M: HasTlsConnectionMethod,
+{
+    /// Set certificate selection callback on **client** side.
+    pub fn with_client_side_certificate_callback<T: 'static + ClientCertificateSelector<M>>(
+        &mut self,
+        cb: Option<T>,
+    ) -> &mut Self {
+        self.as_in_handshake()
+            .set_client_side_certificate_callback(cb);
+        self
+    }
+}
+
 /// # Custom certificate verification
 impl<R, M> TlsConnectionInHandshake<'_, R, M>
 where
@@ -260,6 +296,80 @@ where
         unsafe {
             // Safety: `credential` is still valid.
             bssl_sys::SSL_certs_clear(self.ptr());
+        }
+        self
+    }
+}
+
+/// # Select certificate - Server
+impl<M> TlsConnectionInHandshake<'_, Server, M>
+where
+    M: HasTlsConnectionMethod,
+{
+    /// Set certificate selection callback on **server** side.
+    pub fn set_server_side_certificate_callback<T: 'static + ServerCertificateSelector<M>>(
+        &mut self,
+        cb: Option<T>,
+    ) -> &mut Self {
+        let conn = self.ptr();
+        let methods = self.0.get_connection_methods();
+        if let Some(cb) = cb {
+            methods.server_cert_cb = Some(Box::new(cb) as _);
+            methods.server_cert_cb_installed = true;
+            unsafe {
+                // Safety: we only install our own vtable.
+                bssl_sys::SSL_set_cert_cb(
+                    conn,
+                    Some(select_cert_cb::<super::methods::RustConnectionMethods<M>, M>),
+                    core::ptr::null_mut(),
+                );
+            }
+        } else {
+            methods.server_cert_cb = None;
+            methods.server_cert_cb_installed = false;
+            if !methods.client_cert_cb_installed {
+                unsafe {
+                    // Safety: we only uninstall the vtable.
+                    bssl_sys::SSL_set_cert_cb(conn, None, core::ptr::null_mut());
+                }
+            }
+        }
+        self
+    }
+}
+
+/// # Select certificate - Client
+impl<M> TlsConnectionInHandshake<'_, Client, M>
+where
+    M: HasTlsConnectionMethod,
+{
+    /// Set certificate selection callback on **client** side.
+    pub fn set_client_side_certificate_callback<T: 'static + ClientCertificateSelector<M>>(
+        &mut self,
+        cb: Option<T>,
+    ) -> &mut Self {
+        let conn = self.ptr();
+        let methods = self.0.get_connection_methods();
+        if let Some(cb) = cb {
+            methods.client_cert_cb = Some(Box::new(cb) as _);
+            methods.client_cert_cb_installed = true;
+            unsafe {
+                // Safety: we only install our own vtable.
+                bssl_sys::SSL_set_cert_cb(
+                    conn,
+                    Some(select_cert_cb::<super::methods::RustConnectionMethods<M>, M>),
+                    core::ptr::null_mut(),
+                );
+            }
+        } else {
+            methods.client_cert_cb = None;
+            methods.client_cert_cb_installed = false;
+            if !methods.server_cert_cb_installed {
+                unsafe {
+                    // Safety: we only uninstall the vtable.
+                    bssl_sys::SSL_set_cert_cb(conn, None, core::ptr::null_mut());
+                }
+            }
         }
         self
     }
@@ -477,24 +587,23 @@ impl<'a, R, M> EstablishedTlsConnection<'a, R, M> {
 
 impl<R, M> TlsConnection<R, M> {
     /// Get the peer's [`CertificateType`].
+    ///
+    /// Returns [`None`] if the handshake has not completed.
     pub fn get_peer_certificate_type(&self) -> Option<CertificateType> {
-        let ty = unsafe {
-            // Safety:
-            // - `self.ptr()` is a valid `SSL` handle.
-            bssl_sys::SSL_get_peer_cert_type(self.ptr())
-        };
-        ty.try_into().ok().and_then(|ty: u8| ty.try_into().ok())
+        if self.is_in_handshake() {
+            return None;
+        }
+        get_peer_certificate_type(self.ptr())
     }
 
     /// Get the peer's raw public key as DER-encoded `SubjectPublicKeyInfo`.
+    ///
+    /// Returns [`None`] if the handshake has not completed.
     pub fn get_peer_raw_public_key(&self) -> Option<Vec<u8>> {
-        let pkey = unsafe {
-            // Safety:
-            // - `self.ptr()` is a valid `SSL` handle.
-            // - `pkey` does not escape the current function frame.
-            NonNull::new(bssl_sys::SSL_get0_peer_rpk(self.ptr()))?
-        };
-        Some(crate::credentials::marshal_evp_into_spki(pkey))
+        if self.is_in_handshake() {
+            return None;
+        }
+        get_peer_raw_public_key(self.ptr())
     }
 }
 

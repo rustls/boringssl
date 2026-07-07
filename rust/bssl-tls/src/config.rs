@@ -14,7 +14,6 @@
 
 //! TLS Configurations
 
-use alloc::string::String;
 use core::ffi::c_int;
 
 use bssl_macros::bssl_enum;

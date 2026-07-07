@@ -76,6 +76,7 @@ use crate::{
 
 pub mod early_callback;
 pub(crate) mod methods;
+pub mod select_cert;
 
 /// TLS credentials builder
 pub struct TlsCredentialBuilder<Mode>(NonNull<bssl_sys::SSL_CREDENTIAL>, PhantomData<fn() -> Mode>);
@@ -1163,6 +1164,31 @@ pub(crate) fn marshal_evp_into_spki(pkey: NonNull<bssl_sys::EVP_PKEY>) -> Vec<u8
         );
     });
     buffer.as_ref().to_vec()
+}
+
+/// Get the peer's [`CertificateType`] from a valid SSL handle.
+///
+/// # Safety
+/// `ssl` must be a valid `SSL` pointer.
+pub(crate) fn get_peer_certificate_type(ssl: *mut bssl_sys::SSL) -> Option<CertificateType> {
+    let ty = unsafe {
+        // Safety: `ssl` is a valid `SSL` handle by caller invariant.
+        bssl_sys::SSL_get_peer_cert_type(ssl)
+    };
+    ty.try_into().ok().and_then(|ty: u8| ty.try_into().ok())
+}
+
+/// Get the peer's raw public key as DER-encoded `SubjectPublicKeyInfo` from a valid SSL handle.
+///
+/// # Safety
+/// `ssl` must be a valid `SSL` pointer.
+pub(crate) fn get_peer_raw_public_key(ssl: *mut bssl_sys::SSL) -> Option<Vec<u8>> {
+    let pkey = unsafe {
+        // Safety: `ssl` is a valid `SSL` handle by caller invariant.
+        // `pkey` does not escape the current function frame.
+        NonNull::new(bssl_sys::SSL_get0_peer_rpk(ssl))?
+    };
+    Some(marshal_evp_into_spki(pkey))
 }
 
 crypto_buffer_wrapper! {

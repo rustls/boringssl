@@ -105,6 +105,15 @@ pub(crate) trait EarlyCallbackMethods<M>: MethodsRef {
     fn early_callback_handler(&self) -> Option<&dyn credentials::early_callback::EarlyCallback<M>>;
 }
 
+pub(crate) trait CertCallback<Mode>: MethodsRef {
+    fn server_cert_cb(
+        &self,
+    ) -> Option<&(dyn credentials::select_cert::ServerCertificateSelector<Mode> + 'static)>;
+    fn client_cert_cb(
+        &self,
+    ) -> Option<&(dyn credentials::select_cert::ClientCertificateSelector<Mode> + 'static)>;
+}
+
 #[inline]
 fn abort_on_panic<T>(work: impl FnOnce() -> T) -> T {
     let assert_unwind_safe = AssertUnwindSafe(work);
