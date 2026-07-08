@@ -215,7 +215,10 @@ while(my $line=<>) {
 
     if ($line =~ m/^\s*(#|@|\/\/)/)	{ print $line; next; }
 
-    $line =~ s|/\*.*\*/||;	# get rid of C-style comments...
+    my @comments = ();
+
+    $line =~ s|/\*(.*)\*/||	# get rid of C-style comments...
+	and push @comments, $1;
     $line =~ s|^\s+||;		# ... and skip white spaces in beginning...
     $line =~ s|\s+$||;		# ... and at the end
 
@@ -231,6 +234,12 @@ while(my $line=<>) {
 	    die "r18 is reserved by the platform and may not be used.";
 	}
     }
+
+    my $comments = join ' ', map { s|^\s+||; s|\s+$||; $_; } @comments;
+    my $commentprefix = @comments ? '// ' : '';
+    my $commentspace = @comments ? '  ' : '';
+
+    my $pre_line = '';
 
     {
 	$line =~ s|[\b\.]L(\w{2,})|L$1|g;	# common denominator for Locallabel
@@ -258,10 +267,10 @@ while(my $line=<>) {
 		    # may add necessary relocations. It however is invalid to
 		    # mark the _first_ symbol of a section so, as it always is
 		    # considered an entry point.
-		    printf ".alt_entry %s\n", $name;
+		    $pre_line .= sprintf ".alt_entry %s\n", $name;
 		}
 	    }
-	    printf "%s:", $name;
+	    $pre_line .= sprintf "%s:", $name;
 	}
     }
 
@@ -298,8 +307,11 @@ while(my $line=<>) {
 	}
     }
 
-    print $line if ($line);
-    print "\n";
+    $line = $pre_line . $line;
+    $commentspace = ''
+	if $line !~ /[^\n]$/;
+
+    print $line, $commentspace, $commentprefix, $comments, "\n";
 }
 
 print <<___;
