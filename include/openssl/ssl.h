@@ -2618,7 +2618,6 @@ OPENSSL_EXPORT size_t SSL_CTX_get_num_tickets(const SSL_CTX *ctx);
 #define SSL_GROUP_SECP521R1 25
 #define SSL_GROUP_X25519 29
 #define SSL_GROUP_X25519_MLKEM768 0x11ec
-#define SSL_GROUP_X25519_KYBER768_DRAFT00 0x6399
 #define SSL_GROUP_MLKEM1024 0x0202
 
 // SSL_CTX_set1_group_ids sets the preferred groups for `ctx` to `group_ids`.
@@ -6267,7 +6266,6 @@ OPENSSL_EXPORT int SSL_CTX_set_tlsext_status_arg(SSL_CTX *ctx, void *arg);
 #define SSL_CURVE_SECP384R1 SSL_GROUP_SECP384R1
 #define SSL_CURVE_SECP521R1 SSL_GROUP_SECP521R1
 #define SSL_CURVE_X25519 SSL_GROUP_X25519
-#define SSL_CURVE_X25519_KYBER768_DRAFT00 SSL_GROUP_X25519_KYBER768_DRAFT00
 
 // SSL_get_curve_id calls `SSL_get_group_id`.
 OPENSSL_EXPORT uint16_t SSL_get_curve_id(const SSL *ssl);

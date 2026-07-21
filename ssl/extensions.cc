@@ -107,14 +107,7 @@ static bool tls1_check_duplicate_extensions(const CBS *cbs) {
 }
 
 static bool is_post_quantum_group(uint16_t id) {
-  switch (id) {
-    case SSL_GROUP_X25519_KYBER768_DRAFT00:
-    case SSL_GROUP_X25519_MLKEM768:
-    case SSL_GROUP_MLKEM1024:
-      return true;
-    default:
-      return false;
-  }
+  return id == SSL_GROUP_X25519_MLKEM768 || id == SSL_GROUP_MLKEM1024;
 }
 
 bool ssl_parse_client_hello_with_trailing_data(const SSLImpl *ssl, CBS *cbs,

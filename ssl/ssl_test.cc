@@ -509,10 +509,6 @@ static const CurveTest kCurveTests[] = {
         {SSL_GROUP_SECP256R1},
     },
     {
-        "P-256:X25519Kyber768Draft00",
-        {SSL_GROUP_SECP256R1, SSL_GROUP_X25519_KYBER768_DRAFT00},
-    },
-    {
         "P-256:X25519MLKEM768",
         {SSL_GROUP_SECP256R1, SSL_GROUP_X25519_MLKEM768},
     },
@@ -925,7 +921,7 @@ TEST(SSLTest, ServerSupportedGroupsHint) {
       },
       {
           "Hint one group, not supported by client",
-          {SSL_GROUP_X25519_KYBER768_DRAFT00},
+          {SSL_GROUP_SECP384R1},
           kDefaultKeyShares,
       },
       {
