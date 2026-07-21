@@ -190,6 +190,10 @@ OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ed25519(void);
 // can be done programmatically with OpenSSL's
 // `OSSL_PROVIDER_add_conf_parameter` function, or by passing "-provparam" to
 // the command-line tool.
+//
+// In OpenSSL 4.0, the defaults can also be fixed on a per-encoder basis by
+// setting the "output_formats" parameter to "seed-only" with
+// `OSSL_ENCODER_CTX_set_params`.
 OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ml_dsa_44(void);
 OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ml_dsa_65(void);
 OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ml_dsa_87(void);
@@ -203,6 +207,10 @@ OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ml_dsa_87(void);
 // can be done programmatically with OpenSSL's
 // `OSSL_PROVIDER_add_conf_parameter` function, or by passing "-provparam" to
 // the command-line tool.
+//
+// In OpenSSL 4.0, the defaults can also be fixed on a per-encoder basis by
+// setting the "output_formats" parameter to "seed-only" with
+// `OSSL_ENCODER_CTX_set_params`.
 OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ml_kem_768(void);
 OPENSSL_EXPORT const EVP_PKEY_ALG *EVP_pkey_ml_kem_1024(void);
 
