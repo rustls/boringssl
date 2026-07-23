@@ -498,20 +498,42 @@ impl<R, M> TlsConnection<R, M> {
     }
 }
 
-/// # Certificate authorities - Server
+/// # Certificate authorities - Client
 ///
 /// TLS can send a list of supported certificate authorities to guide the peer in certificate
 /// selection.
-impl<M> TlsConnectionInHandshake<'_, Server, M> {
+impl<M> TlsConnectionInHandshake<'_, Client, M> {
     /// This setting advertises the list of certificate authorities names in the
     /// `certificate_authorities` extension to send the client.
-    pub fn set_ca_names(
+    pub fn set_ca_acceptable_by_client(
         &mut self,
         names: impl IntoIterator<Item = DistinguishedName>,
     ) -> &mut Self {
         unsafe {
             // Safety: this call only transfers the ownership of the stack.
             bssl_sys::SSL_set0_CA_names(
+                self.ptr(),
+                DistinguishedName::into_crypto_buffer_stack(names),
+            )
+        }
+        self
+    }
+}
+
+/// # Certificate authorities - Server
+///
+/// TLS can send a list of supported certificate authorities to guide the peer in certificate
+/// selection.
+impl<M> TlsConnectionInHandshake<'_, Server, M> {
+    /// This setting advertises the list of certificate authorities names in the
+    /// `certificate_authorities` extension to send the server.
+    pub fn set_ca_acceptable_by_server(
+        &mut self,
+        names: impl IntoIterator<Item = DistinguishedName>,
+    ) -> &mut Self {
+        unsafe {
+            // Safety: this call only transfers the ownership of the stack.
+            bssl_sys::SSL_set0_client_CAs(
                 self.ptr(),
                 DistinguishedName::into_crypto_buffer_stack(names),
             )
