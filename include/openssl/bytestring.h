@@ -459,6 +459,7 @@ OPENSSL_EXPORT int CBS_parse_generalized_time(const CBS *cbs, struct tm *out_tm,
 OPENSSL_EXPORT int CBS_parse_utc_time(const CBS *cbs, struct tm *out_tm,
                                       int allow_timezone_offset);
 
+
 // CRYPTO ByteBuilder.
 //
 // `CBB` objects allow one to build length-prefixed serialisations. A `CBB`
