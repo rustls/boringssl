@@ -1820,7 +1820,7 @@ func (hs *serverHandshakeState) processClientExtensions(serverExtensions *server
 		if len(sendClientCertType) == 0 {
 			serverExtensions.clientCertificateType = nil
 		} else {
-			serverExtensions.clientCertificateType = ptrTo(sendClientCertType[0])
+			serverExtensions.clientCertificateType = new(sendClientCertType[0])
 			c.clientCertificateType = serverExtensions.clientCertificateType
 		}
 	}
@@ -1831,7 +1831,7 @@ func (hs *serverHandshakeState) processClientExtensions(serverExtensions *server
 		if len(sendServerCertType) == 0 {
 			serverExtensions.serverCertificateType = nil
 		} else {
-			serverExtensions.serverCertificateType = ptrTo(sendServerCertType[0])
+			serverExtensions.serverCertificateType = new(sendServerCertType[0])
 			c.serverCertificateType = serverExtensions.serverCertificateType
 		}
 	}

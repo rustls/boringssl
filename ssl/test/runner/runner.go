@@ -1627,12 +1627,12 @@ func runTest(dispatcher *shimDispatcher, statusChan chan statusMsg, test *testCa
 	}()
 
 	// Make a copy of the testCase before modifying it in-place.
-	test = ptrTo(*test)
+	test = new(*test)
 	if test.resumeConfig != nil {
-		test.resumeConfig = ptrTo(*test.resumeConfig)
+		test.resumeConfig = new(*test.resumeConfig)
 	}
 	if test.resumeExpectations != nil {
-		test.resumeExpectations = ptrTo(*test.resumeExpectations)
+		test.resumeExpectations = new(*test.resumeExpectations)
 	}
 
 	var flags []string

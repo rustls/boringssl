@@ -1,6 +1,6 @@
 module boringssl.googlesource.com/boringssl.git
 
-go 1.25.8
+go 1.26.5
 
 require (
 	cloud.google.com/go/storage v1.62.3

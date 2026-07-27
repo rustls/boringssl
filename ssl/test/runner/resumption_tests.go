@@ -1068,7 +1068,7 @@ func addSessionTicketTests() {
 					MinVersion: ver.version,
 					MaxVersion: ver.version,
 					Bugs: ProtocolBugs{
-						ExpectResumptionAcrossNames: ptrTo(false),
+						ExpectResumptionAcrossNames: new(false),
 					},
 				},
 			})
@@ -1079,7 +1079,7 @@ func addSessionTicketTests() {
 					MinVersion: ver.version,
 					MaxVersion: ver.version,
 					Bugs: ProtocolBugs{
-						ExpectResumptionAcrossNames: ptrTo(true),
+						ExpectResumptionAcrossNames: new(true),
 					},
 				},
 				flags: []string{"-resumption-across-names-enabled"},

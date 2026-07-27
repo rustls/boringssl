@@ -2809,6 +2809,3 @@ func isAllZero(v []byte) bool {
 	}
 	return true
 }
-
-// https://github.com/golang/go/issues/45624
-func ptrTo[T any](t T) *T { return &t }

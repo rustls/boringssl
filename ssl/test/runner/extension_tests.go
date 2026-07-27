@@ -138,7 +138,7 @@ func addExtensionTests() {
 				flags:         []string{"-expect-server-name", "example.com"},
 				resumeSession: true,
 				expectations: connectionExpectations{
-					serverNameAck: ptrTo(true),
+					serverNameAck: new(true),
 				},
 			})
 			testCases = append(testCases, testCase{
@@ -155,7 +155,7 @@ func addExtensionTests() {
 				},
 				resumeSession: true,
 				expectations: connectionExpectations{
-					serverNameAck: ptrTo(false),
+					serverNameAck: new(false),
 				},
 			})
 
