@@ -77,7 +77,7 @@ impl MethodsRef for RustCredentialMethods {
             if methods.is_null() {
                 return None;
             }
-            // Safety: `cred` is originated from `Box::into_raw`.
+            // Safety: `methods` is originated from `Box::into_raw`.
             Some(&*(methods as *const RustCredentialMethods))
         }
     }
