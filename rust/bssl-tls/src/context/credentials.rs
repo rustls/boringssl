@@ -39,7 +39,7 @@ use crate::{
         cert_cb,
         early_callback::{
             EarlyCallback,
-            early_select_cert_cb, //
+            early_cb, //
         }, //
     },
     errors::Error,
@@ -176,7 +176,7 @@ where
             // Safety: we only install our own vtable.
             bssl_sys::SSL_CTX_set_select_certificate_cb(
                 ctx,
-                Some(early_select_cert_cb::<M, super::methods::RustContextMethods<M>>),
+                Some(early_cb::<M, super::methods::RustContextMethods<M>>),
             );
         }
         self.get_context_methods().early_callback_handler = Some(Box::new(handler) as _);

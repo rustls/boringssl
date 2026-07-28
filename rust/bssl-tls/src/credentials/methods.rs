@@ -25,7 +25,7 @@ use core::{
 use once_cell::sync::Lazy;
 
 use crate::{
-    Methods,
+    MethodsRef,
     PrivateKeyMethods,
     abort_on_panic,
     connection::methods::private_key_op_from_ssl,
@@ -64,7 +64,7 @@ pub(crate) struct RustCredentialMethods {
     pub(crate) private_key_methods: Option<Box<dyn PrivateKeyDelegate>>,
 }
 
-impl Methods for RustCredentialMethods {
+impl MethodsRef for RustCredentialMethods {
     unsafe extern "C" fn from_ssl<'a>(ssl: *mut bssl_sys::SSL) -> Option<&'a Self> {
         unsafe {
             // Safety: `ssl` is valid per BoringSSL invariant.
@@ -78,7 +78,7 @@ impl Methods for RustCredentialMethods {
                 return None;
             }
             // Safety: `cred` is originated from `Box::into_raw`.
-            Some(&*(methods as *mut RustCredentialMethods))
+            Some(&*(methods as *const RustCredentialMethods))
         }
     }
 }

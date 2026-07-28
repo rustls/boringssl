@@ -22,7 +22,7 @@ use once_cell::sync::Lazy;
 
 use crate::{
     EarlyCallbackMethods,
-    Methods,
+    MethodsRef,
     PrivateKeyMethods,
     VerifyCertificateMethods,
     context::{
@@ -65,7 +65,7 @@ impl<M> RustContextMethods<M> {
     }
 }
 
-impl<M: HasTlsContextMethod> Methods for RustContextMethods<M> {
+impl<M: HasTlsContextMethod> MethodsRef for RustContextMethods<M> {
     unsafe extern "C" fn from_ssl<'a>(ssl: *mut bssl_sys::SSL) -> Option<&'a Self> {
         unsafe {
             // Safety: `ssl` must be still valid by BoringSSL invariant.
@@ -75,8 +75,8 @@ impl<M: HasTlsContextMethod> Methods for RustContextMethods<M> {
             }
             // Safety: `ctx` is originated from `TlsContext::new_inner`.
             let methods = bssl_sys::SSL_CTX_get_ex_data(ctx, M::registration());
-            // Safety: `ctx` is originated from `Box::into_raw`
-            Some(&mut *(methods as *mut RustContextMethods<_>))
+            // Safety: `methods` is originated from `Box::into_raw`
+            Some(&*(methods as *const RustContextMethods<_>))
         }
     }
 }

@@ -31,6 +31,7 @@ use once_cell::sync::Lazy;
 
 use crate::{
     Methods,
+    MethodsRef,
     PrivateKeyMethods,
     VerifyCertificateMethods,
     abort_on_panic,
@@ -97,7 +98,7 @@ impl<M> RustConnectionMethods<M> {
     }
 }
 
-impl<Mode: HasTlsConnectionMethod> Methods for RustConnectionMethods<Mode> {
+impl<Mode: HasTlsConnectionMethod> MethodsRef for RustConnectionMethods<Mode> {
     unsafe extern "C" fn from_ssl<'a>(ssl: *mut bssl_sys::SSL) -> Option<&'a Self> {
         unsafe {
             // Safety: `ssl` is originated from `TlsConnection::from_ssl`.
@@ -106,7 +107,23 @@ impl<Mode: HasTlsConnectionMethod> Methods for RustConnectionMethods<Mode> {
                 !methods.is_null(),
                 "connection method should have been attached at construction time"
             );
-            // Safety: `ctx` is originated from `Box::into_raw`
+            // Safety: `methods` is originated from `Box::into_raw`
+            Some(&*(methods as *const RustConnectionMethods<Mode>))
+        }
+    }
+}
+
+impl<Mode: HasTlsConnectionMethod> Methods for RustConnectionMethods<Mode> {
+    unsafe extern "C" fn from_ssl<'a>(ssl: *mut bssl_sys::SSL) -> Option<&'a mut Self> {
+        unsafe {
+            // Safety: `ssl` is originated from `TlsConnection::from_ssl`.
+            let methods = bssl_sys::SSL_get_ex_data(ssl, Mode::registration());
+            debug_assert!(
+                !methods.is_null(),
+                "connection method should have been attached at construction time"
+            );
+            // Safety: `methods` is originated from `Box::into_raw`.
+            // The caller must ensure exclusive access to the connection.
             Some(&mut *(methods as *mut RustConnectionMethods<Mode>))
         }
     }

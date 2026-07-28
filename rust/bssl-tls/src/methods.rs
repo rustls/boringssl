@@ -19,12 +19,9 @@ use core::ffi::{
     c_void, //
 };
 
-use crate::{
-    Methods,
-    abort_on_panic, //
-};
+use crate::abort_on_panic;
 
-pub(crate) unsafe extern "C" fn drop_box_rust_methods<M: Methods>(
+pub(crate) unsafe extern "C" fn drop_box_rust_methods<M>(
     _parent: *mut c_void,
     ptr: *mut c_void,
     _ad: *mut bssl_sys::CRYPTO_EX_DATA,

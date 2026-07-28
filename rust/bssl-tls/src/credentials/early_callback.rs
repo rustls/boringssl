@@ -274,7 +274,8 @@ pub trait EarlyCallback<M>: Send + Sync {
     fn process(&self, client_hello: &mut ClientHello<'_, M>) -> EarlyCallbackResult;
 }
 
-pub(crate) unsafe extern "C" fn early_select_cert_cb<Mode, MethodsT>(
+// For this callback, MethodsT could only be RustContextMethods<Mode>.
+pub(crate) unsafe extern "C" fn early_cb<Mode, MethodsT>(
     client_hello: *const bssl_sys::SSL_CLIENT_HELLO,
 ) -> bssl_sys::ssl_select_cert_result_t
 where
