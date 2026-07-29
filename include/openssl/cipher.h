@@ -758,6 +758,12 @@ struct evp_cipher_ctx_st {
 
   // Has this structure been rendered unusable by a failure.
   int poisoned;
+
+  // INTERNAL: Has this structure been mutated by the current operation?
+  // To be set whenever anything meaningful has been modified. Modification
+  // to `buf` beyond `buf_len` needs not be indicated.
+  // Invariant: `poisoned` implies `mutated`.
+  int mutated;
 } /* EVP_CIPHER_CTX */;
 
 typedef struct evp_cipher_info_st {

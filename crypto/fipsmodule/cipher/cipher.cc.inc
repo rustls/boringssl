@@ -192,7 +192,7 @@ int EVP_CipherInit_ex(EVP_CIPHER_CTX *ctx, const EVP_CIPHER *cipher,
   ctx->final_used = 0;
   // Clear the poisoned flag to permit reuse of a CTX that previously had a
   // failed operation.
-  ctx->poisoned = 0;
+  ctx->poisoned = false;
   return 1;
 }
 
@@ -250,10 +250,14 @@ static int WrapWithPoison(EVP_CIPHER_CTX *ctx, F f) {
     OPENSSL_PUT_ERROR(CIPHER, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
     return 0;
   }
+  // Invariant fulfilled: `mutated` is only cleared if `!poisoned`.
+  ctx->mutated = false;
   if (!f()) {
     // Functions using `WrapWithPoison` may leave `ctx` in an indeterminate
-    // state. Mark the object as poisoned.
-    ctx->poisoned = 1;
+    // state. Mark the object as poisoned if it's been mutated.
+    // Invariant fulfilled: `poisoned` is only set if `mutated`.
+    // This never unsets `poisoned` because `poisoned` implies `mutated`.
+    ctx->poisoned = ctx->mutated;
     return 0;
   }
   return 1;
@@ -263,6 +267,11 @@ static int EVP_EncryptUpdate_ex_internal(EVP_CIPHER_CTX *ctx, uint8_t *out,
                                          size_t *out_len, size_t max_out_len,
                                          const uint8_t *in, size_t in_len) {
   *out_len = 0;
+
+  if (max_out_len < EVP_CIPHER_CTX_max_next_update(ctx, in_len)) {
+    OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_BUFFER_TOO_SMALL);
+    return 0;
+  }
 
   // Ciphers that use blocks may write up to `block_size` extra bytes. Ensure
   // the output does not overflow `*out_len`.
@@ -279,6 +288,7 @@ static int EVP_EncryptUpdate_ex_internal(EVP_CIPHER_CTX *ctx, uint8_t *out,
   if (buf_len != 0) {
     if (block_size - buf_len > in_span.size()) {
       CopyToPrefix(in_span, Span(ctx->buf).subspan(buf_len));
+      ctx->mutated = true;
       ctx->buf_len += in_span.size();
       return 1;
     } else {
@@ -288,6 +298,7 @@ static int EVP_EncryptUpdate_ex_internal(EVP_CIPHER_CTX *ctx, uint8_t *out,
         OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_BUFFER_TOO_SMALL);
         return 0;
       }
+      ctx->mutated = true;
       if (!ctx->cipher->cipher_update(ctx, out_span.data(), ctx->buf,
                                       block_size)) {
         return 0;
@@ -303,6 +314,7 @@ static int EVP_EncryptUpdate_ex_internal(EVP_CIPHER_CTX *ctx, uint8_t *out,
       OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_BUFFER_TOO_SMALL);
       return 0;
     }
+    ctx->mutated = true;
     if (!ctx->cipher->cipher_update(ctx, out_span.data(), in_span.data(),
                                     whole_blocks)) {
       return 0;
@@ -313,6 +325,7 @@ static int EVP_EncryptUpdate_ex_internal(EVP_CIPHER_CTX *ctx, uint8_t *out,
 
   assert(in_span.size() < block_size);
   CopyToPrefix(in_span, ctx->buf);
+  ctx->mutated = true;
   ctx->buf_len = in_span.size();
 
   *out_len = max_out_len - out_span.size();
@@ -341,10 +354,16 @@ static int EVP_EncryptFinal_ex2_internal(EVP_CIPHER_CTX *ctx, uint8_t *out,
                                          size_t *out_len, size_t max_out_len) {
   *out_len = 0;
 
+  if (max_out_len < EVP_CIPHER_CTX_max_final(ctx)) {
+    OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_BUFFER_TOO_SMALL);
+    return 0;
+  }
+
   size_t block_size = ctx->cipher->block_size;
   assert(block_size <= sizeof(ctx->buf));
   if (block_size == 1) {
     if (ctx->cipher->flags & EVP_CIPH_FLAG_CUSTOM_CIPHER) {
+      ctx->mutated = true;
       return ctx->cipher->cipher_final(ctx);
     }
     return 1;
@@ -369,6 +388,7 @@ static int EVP_EncryptFinal_ex2_internal(EVP_CIPHER_CTX *ctx, uint8_t *out,
     OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_BUFFER_TOO_SMALL);
     return 0;
   }
+  ctx->mutated = true;
   if (!ctx->cipher->cipher_update(ctx, out_span.data(), ctx->buf, block_size)) {
     return 0;
   }
@@ -422,6 +442,11 @@ static int EVP_DecryptUpdate_ex_internal(EVP_CIPHER_CTX *ctx, uint8_t *out,
                                          const uint8_t *in, size_t in_len) {
   *out_len = 0;
 
+  if (max_out_len < EVP_CIPHER_CTX_max_next_update(ctx, in_len)) {
+    OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_BUFFER_TOO_SMALL);
+    return 0;
+  }
+
   // Ciphers that use blocks may write up to `block_size` extra bytes. Ensure
   // the output does not overflow `*out_len`.
   Span<const uint8_t> in_span(in, in_len);
@@ -446,6 +471,7 @@ static int EVP_DecryptUpdate_ex_internal(EVP_CIPHER_CTX *ctx, uint8_t *out,
       return 0;
     }
     CopyToPrefix(Span(ctx->final).first(block_size), out_span);
+    ctx->mutated = true;
     ctx->final_used = 0;
     out_span = out_span.subspan(block_size);
   }
@@ -478,6 +504,7 @@ static int EVP_DecryptUpdate_ex_internal(EVP_CIPHER_CTX *ctx, uint8_t *out,
                                        in_span.size())) {
       return 0;
     }
+    ctx->mutated = true;
     ctx->final_used = 1;
     assert(final_size == block_size);
     assert(ctx->buf_len == 0);
@@ -519,10 +546,16 @@ static int EVP_DecryptFinal_ex2_internal(EVP_CIPHER_CTX *ctx,
                                          size_t max_out_len) {
   *out_len = 0;
 
+  // NOT checking `max_out_len < EVP_CIPHER_CTX_max_final(ctx)` here. This
+  // method doesn't mutate the context, and as such, the resulting status is
+  // always well-defined. That way, we get `CIPHER_R_BUFFER_TOO_SMALL` only if
+  // the output buffer was actually too small.
+
   size_t block_size = ctx->cipher->block_size;
   assert(block_size <= sizeof(ctx->buf));
   if (block_size == 1) {
     if (ctx->cipher->flags & EVP_CIPH_FLAG_CUSTOM_CIPHER) {
+      ctx->mutated = true;
       return ctx->cipher->cipher_final(ctx);
     }
     return 1;
@@ -659,6 +692,7 @@ int EVP_CipherUpdateAAD(EVP_CIPHER_CTX *ctx, const uint8_t *in, size_t in_len) {
       OPENSSL_PUT_ERROR(CIPHER, ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED);
       return 0;
     }
+    ctx->mutated = true;
     return ctx->cipher->update_aad(ctx, in, in_len);
   });
 }
