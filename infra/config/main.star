@@ -1620,3 +1620,13 @@ both_builders(
         "prefixed_symbols": True,
     }),
 )
+
+# TODO(crbug.com/540364710): Roll that flag to the other builds, then inline.
+cq_builders(
+    "linux_tmp_try_out_cas",
+    LINUX_HOST,
+    cq_enabled = False,
+    properties = {
+        "upload_to_cas": True,
+    },
+)
