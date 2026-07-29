@@ -3859,6 +3859,12 @@ OPENSSL_EXPORT SSL_CREDENTIAL *SSL_CREDENTIAL_new_pre_shared_key(
     const uint8_t *key, size_t key_len, const uint8_t *id, size_t id_len,
     const EVP_MD *md, const uint8_t *context, size_t context_len);
 
+// SSL_CREDENTIAL_get0_pre_shared_key_id returns the external identity of this
+// pre-shared key credential, or NULL if `cred` is not a pre-shared key
+// credential or `id_len` is NULL.
+OPENSSL_EXPORT const uint8_t *SSL_CREDENTIAL_get0_pre_shared_key_id(
+    const SSL_CREDENTIAL *cred, size_t *id_len);
+
 
 // TLS 1.2 pre-shared keys.
 //

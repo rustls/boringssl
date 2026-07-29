@@ -393,6 +393,18 @@ SSL_CREDENTIAL *SSL_CREDENTIAL_new_pre_shared_key(
   return cred.release();
 }
 
+const uint8_t *SSL_CREDENTIAL_get0_pre_shared_key_id(const SSL_CREDENTIAL *cred,
+                                                     size_t *id_len) {
+  *id_len = 0;
+  auto *cred_impl = FromOpaque(cred);
+  if (cred_impl == nullptr ||
+      cred_impl->type != SSLCredentialType::kPreSharedKey) {
+    return nullptr;
+  }
+  *id_len = cred_impl->epsk_id.size();
+  return cred_impl->epsk_id.data();
+}
+
 SSL_CREDENTIAL *SSL_CREDENTIAL_new_delegated() {
   return New<SSLCredential>(SSLCredentialType::kDelegated);
 }
