@@ -579,7 +579,7 @@ if(FIPS_DELOCATE)
             ${BCM_SOURCES_ASM_USED}
             ${CRYPTO_HEADERS}
     DEPENDS bcm_c_generated_asm
-            delocate
+            ${CMAKE_CURRENT_BINARY_DIR}/delocate
             ${BCM_SOURCES_ASM_USED}
             ${CRYPTO_HEADERS}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -597,9 +597,9 @@ if(FIPS_DELOCATE)
                 boringssl.googlesource.com/boringssl.git/util/fipstools/inject_hash)
   add_custom_command(
     OUTPUT bcm.o
-    COMMAND ./inject_hash -o bcm.o -in-object $<TARGET_OBJECTS:bcm_hashunset>
-            -in-hash $<TARGET_FILE:bcm_relocated>
-    DEPENDS bcm_hashunset bcm_relocated inject_hash
+    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/inject_hash -o bcm.o -in-object
+            $<TARGET_OBJECTS:bcm_hashunset> -in-hash $<TARGET_FILE:bcm_relocated>
+    DEPENDS bcm_hashunset bcm_relocated ${CMAKE_CURRENT_BINARY_DIR}/inject_hash
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
   set(CRYPTO_FIPS_OBJECTS bcm.o)
