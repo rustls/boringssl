@@ -30,6 +30,7 @@ use core::{
 use once_cell::sync::Lazy;
 
 use crate::{
+    HandshakeCompleteMethods,
     Methods,
     MethodsRef,
     PrivateKeyMethods,
@@ -66,6 +67,8 @@ pub(super) struct RustConnectionMethods<Mode> {
     pub private_key_delegate: Option<Box<dyn PrivateKeyDelegate>>,
     /// Certificate verifier handle.
     pub verify_certificate_methods: Option<Box<dyn VerifyCertificate>>,
+    /// Handshake-complete callback.
+    pub handshake_complete: Option<Box<dyn super::lifecycle::HandshakeComplete>>,
     /// A mailbox to propagate IO retrying reasons.
     pub pending_reason: Option<TlsRetryReason>,
     _p: PhantomData<fn() -> Mode>,
@@ -77,6 +80,7 @@ impl<M> RustConnectionMethods<M> {
             bio: None,
             private_key_delegate: None,
             verify_certificate_methods: None,
+            handshake_complete: None,
             pending_reason: None,
             _p: PhantomData,
         }
@@ -138,6 +142,14 @@ impl<M: HasTlsConnectionMethod> PrivateKeyMethods for RustConnectionMethods<M> {
 impl<Mode: HasTlsConnectionMethod> VerifyCertificateMethods for RustConnectionMethods<Mode> {
     fn verify_certificate_methods(&self) -> Option<&dyn VerifyCertificate> {
         self.verify_certificate_methods.as_deref()
+    }
+}
+
+impl<M: HasTlsConnectionMethod> HandshakeCompleteMethods for RustConnectionMethods<M> {
+    fn handshake_complete_methods(
+        &mut self,
+    ) -> Option<Box<dyn super::lifecycle::HandshakeComplete>> {
+        self.handshake_complete.take()
     }
 }
 

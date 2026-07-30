@@ -387,6 +387,14 @@ impl TlsCredential {
         self.0.as_ptr()
     }
 
+    pub(crate) fn from_raw_and_upref(cred: NonNull<bssl_sys::SSL_CREDENTIAL>) -> Self {
+        unsafe {
+            // Safety: we are only bumping the ref-count.
+            bssl_sys::SSL_CREDENTIAL_up_ref(cred.as_ptr());
+        }
+        Self(cred)
+    }
+
     /// Create a new pre-shared key credential for TLS 1.3.
     ///
     /// See [RFC 9258](https://datatracker.ietf.org/doc/html/rfc9258) for details.
@@ -418,6 +426,24 @@ impl TlsCredential {
         };
         let cred = NonNull::new(cred).ok_or_else(|| Error::extract_lib_err())?;
         Ok(TlsCredential(cred))
+    }
+
+    /// Return the external identity of this pre-shared key credential.
+    ///
+    /// Returns `None` if this credential is not a pre-shared key credential.
+    pub fn get_pre_shared_key_id(&self) -> Option<&[u8]> {
+        let mut id_len: usize = 0;
+        let id_ptr = unsafe {
+            // Safety: `self.0` is a valid `SSL_CREDENTIAL` handle.
+            bssl_sys::SSL_CREDENTIAL_get0_pre_shared_key_id(self.ptr(), &mut id_len)
+        };
+        if id_ptr.is_null() {
+            return None;
+        }
+        unsafe {
+            // Safety: `id_ptr` will be outlived by `self`.
+            sanitize_slice(id_ptr, id_len)
+        }
     }
 }
 

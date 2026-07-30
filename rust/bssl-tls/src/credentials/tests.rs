@@ -12,9 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::future::{
-    Ready,
-    ready, //
+use std::{
+    future::{
+        Ready,
+        ready, //
+    },
+    sync::{
+        Arc,
+        Mutex, //
+    }, //
 };
 
 use bssl_crypto::ecdsa::ParsedPrivateKey;
@@ -26,6 +32,10 @@ use futures::future::try_join;
 
 use super::*;
 use crate::{
+    connection::lifecycle::{
+        HandshakeComplete,
+        HandshakeInfo, //
+    },
     context::{
         TlsContextBuilder,
         TlsMode, //
@@ -159,25 +169,49 @@ lTU7GxRvRinKa52GnUNLqxkmTTcFegGMevICfN7JUaUTDiEQGGJ6jNw=
 
 #[test]
 fn psk_tls13_handshake() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let key = b"test-key-test-key-test-key-test-key";
-    let identity = b"test-identity";
+    let key_a = b"test-key-aaaa-test-key-aaaa-aaaa";
+    let key_b = b"test-key-bbbb-test-key-bbbb-bbbb";
+    let identity_a = b"identity-a";
+    let identity_b = b"identity-b";
     let context = b"test-context";
 
-    let cred = TlsCredential::new_pre_shared_key(key, identity, PskHash::Sha256, context)?;
+    let cred_a = TlsCredential::new_pre_shared_key(key_a, identity_a, PskHash::Sha256, context)?;
+    let cred_b = TlsCredential::new_pre_shared_key(key_b, identity_b, PskHash::Sha256, context)?;
 
+    // Server only has cred_b, so it must select cred_b.
     let mut server_ctx = TlsContextBuilder::new_tls();
-    server_ctx.with_credential(cred.clone())?;
-
-    let mut client_ctx = TlsContextBuilder::new_tls();
-    client_ctx.with_credential(cred)?;
-
+    server_ctx.with_credential(cred_b.clone())?;
     let server_ctx = server_ctx.build();
+
+    // Client offers both cred_a and cred_b.
+    let mut client_ctx = TlsContextBuilder::new_tls();
+    client_ctx
+        .with_credential(cred_a)?
+        .with_credential(cred_b)?;
     let client_ctx = client_ctx.build();
 
     let (client_socket, server_socket, mut executor) = create_mock_pipe();
 
+    let selected_cred: Arc<Mutex<Option<TlsCredential>>> = Arc::new(Mutex::new(None));
+
+    struct Callback {
+        selected: Arc<Mutex<Option<TlsCredential>>>,
+    }
+
+    impl HandshakeComplete for Callback {
+        fn handshake_complete(&mut self, hs: &HandshakeInfo) {
+            let cred = hs.get_selected_credential();
+            *self.selected.lock().unwrap() = cred;
+        }
+    }
+
+    let mut server_builder = server_ctx.new_server_connection();
+    server_builder.with_handshake_complete_callback(Callback {
+        selected: selected_cred.clone(),
+    });
+    let mut server_conn = server_builder.build();
+
     let mut client_conn = client_ctx.new_client_connection().build();
-    let mut server_conn = server_ctx.new_server_connection().build();
 
     client_conn.set_io(client_socket)?;
     server_conn.set_io(server_socket)?;
@@ -198,6 +232,16 @@ fn psk_tls13_handshake() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
     };
 
     executor.run(test_future)?;
+
+    let selected = selected_cred.lock().unwrap();
+    let selected = selected
+        .as_ref()
+        .expect("handshake complete callback should have been called");
+    assert_eq!(
+        selected.get_pre_shared_key_id(),
+        Some(identity_b.as_slice()),
+        "server should have selected cred_b (identity-b)"
+    );
 
     Ok(())
 }

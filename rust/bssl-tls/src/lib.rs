@@ -87,6 +87,12 @@ pub(crate) trait MethodsRef {
     unsafe extern "C" fn from_ssl<'a>(ssl: *mut bssl_sys::SSL) -> Option<&'a Self>;
 }
 
+pub(crate) trait HandshakeCompleteMethods: Methods {
+    fn handshake_complete_methods(
+        &mut self,
+    ) -> Option<Box<dyn connection::lifecycle::HandshakeComplete>>;
+}
+
 pub(crate) trait PrivateKeyMethods: MethodsRef {
     fn private_key_methods(&self) -> Option<&dyn credentials::PrivateKeyDelegate>;
 }
