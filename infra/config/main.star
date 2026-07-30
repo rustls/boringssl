@@ -1621,12 +1621,32 @@ both_builders(
     }),
 )
 
+# The list of patterns for finished output files.
+# For now not filtered by OS - to be filtered later once I could see what was
+# actually generated on each OS.
+# TODO(crbug.com/540364710): Split by OS once rolled out to all builds.
+FINISHED_OUTPUT_FILES = set([
+    "**/*.a",
+    "**/*.dll",
+    "**/*.dylib",
+    "**/*.exe",
+    "**/*.lib",
+    "**/*.so",
+    "**/*_bench",
+    "**/*_shim",
+    "**/*_test",
+    "**/bssl",
+    "**/generate_mldsa_certs",
+    "**/jitter_deltas",
+    "**/test_fips",
+])
+
 # TODO(crbug.com/540364710): Roll that flag to the other builds, then inline.
 cq_builders(
     "linux_tmp_try_out_cas",
     LINUX_HOST,
     cq_enabled = False,
     properties = {
-        "upload_to_cas": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES,
     },
 )
