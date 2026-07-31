@@ -657,8 +657,8 @@ def finished_output_files(exe_suffix, lib_prefix, lib_suffix):
 
 FINISHED_OUTPUT_FILES_LINUX_STATIC = finished_output_files("", "lib", ".a")
 FINISHED_OUTPUT_FILES_LINUX_SHARED = finished_output_files("", "lib", ".so")
-FINISHED_OUTPUT_FILES_WINDOWS_STATIC = finished_output_files(".exe", "", ".lib")
-FINISHED_OUTPUT_FILES_WINDOWS_SHARED = finished_output_files(".exe", "", ".dll")
+FINISHED_OUTPUT_FILES_WIN_STATIC = finished_output_files(".exe", "", ".lib")
+FINISHED_OUTPUT_FILES_WIN_SHARED = finished_output_files(".exe", "", ".dll")
 FINISHED_OUTPUT_FILES_MAC_STATIC = finished_output_files("", "lib", ".a")
 FINISHED_OUTPUT_FILES_MAC_SHARED = finished_output_files("", "lib", ".dylib")
 
@@ -1672,6 +1672,59 @@ cq_builders(
     LINUX_HOST,
     cq_enabled = False,
     properties = {
-        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
+        # Already tested: "linux".
+        # Now tested: "linux_shared".
+        "cmake_args": {
+            "BUILD_SHARED_LIBS": "1",
+        },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_SHARED,
+    },
+)
+
+cq_builders(
+    "mac_tmp_try_out_cas",
+    MAC_X86_64_HOST,
+    cq_enabled = False,
+    properties = {
+        # Now tested: "mac".
+        "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_STATIC,
+    },
+)
+
+cq_builders(
+    "mac_shared_tmp_try_out_cas",
+    MAC_X86_64_HOST,
+    cq_enabled = False,
+    properties = {
+        # Now tested: "mac_shared".
+        "cmake_args": {
+            "BUILD_SHARED_LIBS": "1",
+        },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_SHARED,
+    },
+)
+
+cq_builders(
+    "win_tmp_try_out_cas",
+    WIN_HOST,
+    cq_enabled = False,
+    properties = {
+        # Now tested: "win32".
+        "msvc_target": "x86",
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
+    },
+)
+
+cq_builders(
+    "win_shared_tmp_try_out_cas",
+    WIN_HOST,
+    cq_enabled = False,
+    properties = {
+        # Now tested: "win64_shared".
+        "msvc_target": "x64",
+        "cmake_args": {
+            "BUILD_SHARED_LIBS": "1",
+        },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_SHARED,
     },
 )
