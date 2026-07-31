@@ -617,6 +617,51 @@ WALLEYE_HOST = {
 # SDE tests take longer to run.
 SDE_TIMEOUT = 3 * 60 * time.minute
 
+def finished_output_files(exe_suffix, lib_prefix, lib_suffix):
+    """Calculates the list of patterns for useful finished output files.
+
+    Args:
+      exe_suffix: the file suffix of executables (with period if any).
+      lib_prefix: the file prefix of libraries.
+      lib_suffix: the file suffix of libraries (with period if any).
+
+    Returns:
+      A list of wildcard patterns for all files to return.
+    """
+    is_static = lib_suffix in ("a", "lib")
+    outputs = []
+    for name in [
+        "*_bench",
+        "*_test",
+        "bssl",
+        "generate_*",
+        "jitter_deltas",
+        "ssl/test/bssl_shim",
+        "test_*",
+    ]:
+        outputs.append("{0}{1}".format(name, exe_suffix))
+    if lib_suffix in (".a", ".lib"):
+        # When building static libs, only export the actually interesting ones.
+        for name in [
+            "crypto",
+            "decrepit",
+            "pki",
+            "ssl",
+        ]:
+            outputs.append("{1}{0}{2}".format(name, lib_prefix, lib_suffix))
+    else:
+        # When building dynamic libs, export all, as they are required for
+        # running the binaries.
+        outputs.append("**/{0}*{1}".format(lib_prefix, lib_suffix))
+    return outputs
+
+FINISHED_OUTPUT_FILES_LINUX_STATIC = finished_output_files("", "lib", ".a")
+FINISHED_OUTPUT_FILES_LINUX_SHARED = finished_output_files("", "lib", ".so")
+FINISHED_OUTPUT_FILES_WINDOWS_STATIC = finished_output_files(".exe", "", ".lib")
+FINISHED_OUTPUT_FILES_WINDOWS_SHARED = finished_output_files(".exe", "", ".dll")
+FINISHED_OUTPUT_FILES_MAC_STATIC = finished_output_files("", "lib", ".a")
+FINISHED_OUTPUT_FILES_MAC_SHARED = finished_output_files("", "lib", ".dylib")
+
 # TODO(davidben): Switch the BoringSSL recipe to specify most flags in
 # properties rather than parsing names. Then we can add new configurations
 # without having to touch multiple repositories.
@@ -1621,32 +1666,12 @@ both_builders(
     }),
 )
 
-# The list of patterns for finished output files.
-# For now not filtered by OS - to be filtered later once I could see what was
-# actually generated on each OS.
-# TODO(crbug.com/540364710): Split by OS once rolled out to all builds.
-FINISHED_OUTPUT_FILES = set([
-    "**/*.a",
-    "**/*.dll",
-    "**/*.dylib",
-    "**/*.exe",
-    "**/*.lib",
-    "**/*.so",
-    "**/*_bench",
-    "**/*_shim",
-    "**/*_test",
-    "**/bssl",
-    "**/generate_mldsa_certs",
-    "**/jitter_deltas",
-    "**/test_fips",
-])
-
 # TODO(crbug.com/540364710): Roll that flag to the other builds, then inline.
 cq_builders(
     "linux_tmp_try_out_cas",
     LINUX_HOST,
     cq_enabled = False,
     properties = {
-        "upload_to_cas": FINISHED_OUTPUT_FILES,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
