@@ -18,6 +18,7 @@
 #include <string.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -1417,13 +1418,31 @@ TEST(CipherTest, Uninitialized) {
   }
 }
 
-TEST(CipherTest, NonPoisoningErrors) {
+TEST(CipherTest, RetryAfterError) {
   const uint8_t kKey[16] = {1, 2,  3,  4,  5,  6,  7,  8,
                             9, 10, 11, 12, 13, 14, 15, 16};
   const uint8_t kIV[16] = {0};
-  uint8_t in[32] = {0};
-  uint8_t out[64];
-  size_t out_len;
+
+  // Compute a sample plaintext/ciphertext pair.
+  uint8_t plaintext[40];
+  for (size_t i = 0; i < sizeof(plaintext); i++) {
+    plaintext[i] = static_cast<uint8_t>(i);
+  }
+  uint8_t ciphertext[48];
+  {
+    bssl::UniquePtr<EVP_CIPHER_CTX> ctx(EVP_CIPHER_CTX_new());
+    ASSERT_TRUE(ctx);
+    ASSERT_TRUE(
+        EVP_EncryptInit_ex(ctx.get(), EVP_aes_128_cbc(), nullptr, kKey, kIV));
+    size_t len1;
+    ASSERT_TRUE(EVP_EncryptUpdate_ex(ctx.get(), ciphertext, &len1,
+                                     sizeof(ciphertext), plaintext,
+                                     sizeof(plaintext)));
+    size_t len2;
+    ASSERT_TRUE(EVP_EncryptFinal_ex2(ctx.get(), ciphertext + len1, &len2,
+                                     sizeof(ciphertext) - len1));
+    ASSERT_EQ(sizeof(ciphertext), len1 + len2);
+  }
 
   // EncryptUpdate output buffer size error does not poison the context.
   {
@@ -1431,16 +1450,50 @@ TEST(CipherTest, NonPoisoningErrors) {
     ASSERT_TRUE(ctx);
     ASSERT_TRUE(
         EVP_EncryptInit_ex(ctx.get(), EVP_aes_128_cbc(), nullptr, kKey, kIV));
-    // Calling EVP_EncryptUpdate_ex with max_out_len = 0 fails with
-    // CIPHER_R_BUFFER_TOO_SMALL.
-    EXPECT_FALSE(
-        EVP_EncryptUpdate_ex(ctx.get(), out, &out_len, 0, in, sizeof(in)));
+    // Call EVP_EncryptUpdate_ex with too small of a buffer.
+    uint8_t out[sizeof(ciphertext)];
+    size_t out_len;
+    EXPECT_FALSE(EVP_EncryptUpdate_ex(ctx.get(), out, &out_len, 0, plaintext,
+                                      sizeof(plaintext)));
+    ASSERT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER,
+                            CIPHER_R_BUFFER_TOO_SMALL));
+    EXPECT_FALSE(EVP_EncryptUpdate_ex(ctx.get(), out, &out_len,
+                                      31 /* one byte too short */, plaintext,
+                                      sizeof(plaintext)));
+    ASSERT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER,
+                            CIPHER_R_BUFFER_TOO_SMALL));
+    // A subsequent call with sufficient output buffer succeeds.
+    ASSERT_TRUE(EVP_EncryptUpdate_ex(ctx.get(), out, &out_len, sizeof(out),
+                                     plaintext, sizeof(plaintext)));
+    EXPECT_EQ(Bytes(out, out_len), Bytes(ciphertext, out_len));
+  }
+
+  // Same as above, but with some buffered plaintext.
+  {
+    bssl::UniquePtr<EVP_CIPHER_CTX> ctx(EVP_CIPHER_CTX_new());
+    ASSERT_TRUE(ctx);
+    ASSERT_TRUE(
+        EVP_EncryptInit_ex(ctx.get(), EVP_aes_128_cbc(), nullptr, kKey, kIV));
+    // Call EVP_EncryptUpdate_ex with too small of a buffer.
+    uint8_t out[sizeof(ciphertext)];
+    size_t out_len;
+    ASSERT_TRUE(
+        EVP_EncryptUpdate_ex(ctx.get(), out, &out_len, 0, plaintext, 5));
+    EXPECT_EQ(out_len, 0u);
+    auto rest = Span(plaintext).subspan(5);
+    EXPECT_FALSE(EVP_EncryptUpdate_ex(ctx.get(), out, &out_len, 0, rest.data(),
+                                      rest.size()));
     EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER,
                             CIPHER_R_BUFFER_TOO_SMALL));
-    // The context is not poisoned; a subsequent call with sufficient output
-    // buffer succeeds.
-    EXPECT_TRUE(EVP_EncryptUpdate_ex(ctx.get(), out, &out_len, sizeof(out), in,
-                                     sizeof(in)));
+    EXPECT_FALSE(EVP_EncryptUpdate_ex(ctx.get(), out, &out_len,
+                                      31 /* one byte too short */, rest.data(),
+                                      rest.size()));
+    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER,
+                            CIPHER_R_BUFFER_TOO_SMALL));
+    // A subsequent call with sufficient output buffer succeeds.
+    ASSERT_TRUE(EVP_EncryptUpdate_ex(ctx.get(), out, &out_len, sizeof(out),
+                                     rest.data(), rest.size()));
+    EXPECT_EQ(Bytes(out, out_len), Bytes(ciphertext, out_len));
   }
 
   // EncryptFinal output buffer size error does not poison the context.
@@ -1449,16 +1502,22 @@ TEST(CipherTest, NonPoisoningErrors) {
     ASSERT_TRUE(ctx);
     ASSERT_TRUE(
         EVP_EncryptInit_ex(ctx.get(), EVP_aes_128_cbc(), nullptr, kKey, kIV));
-    ASSERT_TRUE(EVP_EncryptUpdate_ex(ctx.get(), out, &out_len, sizeof(out), in,
-                                     sizeof(in)));
-    // Calling EVP_EncryptFinal_ex2 with max_out_len = 0 fails with
-    // CIPHER_R_BUFFER_TOO_SMALL.
-    EXPECT_FALSE(EVP_EncryptFinal_ex2(ctx.get(), out, &out_len, 0));
+    uint8_t out[sizeof(ciphertext)];
+    size_t len1, len2;
+    ASSERT_TRUE(EVP_EncryptUpdate_ex(ctx.get(), out, &len1, sizeof(out),
+                                     plaintext, sizeof(plaintext)));
+    // Call EVP_EncryptFinal_ex2 with too small of a buffer.
+    EXPECT_FALSE(EVP_EncryptFinal_ex2(ctx.get(), out + len1, &len2, 0));
     EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER,
                             CIPHER_R_BUFFER_TOO_SMALL));
-    // The context is not poisoned; a subsequent call with sufficient output
-    // buffer succeeds.
-    EXPECT_TRUE(EVP_EncryptFinal_ex2(ctx.get(), out, &out_len, sizeof(out)));
+    EXPECT_FALSE(EVP_EncryptFinal_ex2(ctx.get(), out + len1, &len2,
+                                      sizeof(out) - len1 - 1));
+    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER,
+                            CIPHER_R_BUFFER_TOO_SMALL));
+    // A subsequent call with sufficient output buffer succeeds.
+    ASSERT_TRUE(
+        EVP_EncryptFinal_ex2(ctx.get(), out + len1, &len2, sizeof(out) - len1));
+    EXPECT_EQ(Bytes(out + len1, len2), Bytes(Span(ciphertext).subspan(len1)));
   }
 
   // DecryptUpdate output buffer size error does not poison the context.
@@ -1467,50 +1526,46 @@ TEST(CipherTest, NonPoisoningErrors) {
     ASSERT_TRUE(ctx);
     ASSERT_TRUE(
         EVP_DecryptInit_ex(ctx.get(), EVP_aes_128_cbc(), nullptr, kKey, kIV));
-    // Calling EVP_DecryptUpdate_ex with max_out_len = 0 fails with
-    // CIPHER_R_BUFFER_TOO_SMALL.
-    EXPECT_FALSE(
-        EVP_DecryptUpdate_ex(ctx.get(), out, &out_len, 0, in, sizeof(in)));
+    uint8_t out[sizeof(plaintext)];
+    size_t out_len;
+    // Call EVP_DecryptUpdate_ex with too small of a buffer.
+    EXPECT_FALSE(EVP_DecryptUpdate_ex(ctx.get(), out, &out_len, 0, ciphertext,
+                                      sizeof(ciphertext)));
     EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER,
                             CIPHER_R_BUFFER_TOO_SMALL));
-    // The context is not poisoned; a subsequent call with sufficient output
-    // buffer succeeds.
-    EXPECT_TRUE(EVP_DecryptUpdate_ex(ctx.get(), out, &out_len, sizeof(out), in,
-                                     sizeof(in)));
+    EXPECT_FALSE(EVP_DecryptUpdate_ex(ctx.get(), out, &out_len,
+                                      31 /* one byte too short */, ciphertext,
+                                      sizeof(ciphertext)));
+    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER,
+                            CIPHER_R_BUFFER_TOO_SMALL));
+    // A subsequent call with sufficient output buffer succeeds.
+    ASSERT_TRUE(EVP_DecryptUpdate_ex(ctx.get(), out, &out_len, sizeof(out),
+                                     ciphertext, sizeof(ciphertext)));
+    EXPECT_EQ(Bytes(out, out_len), Bytes(plaintext, out_len));
   }
 
   // DecryptFinal output buffer size error does not poison the context.
   {
-    // Generate valid ciphertext for 10 bytes of input (so payload length is 10
-    // > 0).
-    uint8_t ciphertext[32];
-    size_t ciphertext_len = 0, final_len = 0;
-    bssl::UniquePtr<EVP_CIPHER_CTX> enc_ctx(EVP_CIPHER_CTX_new());
-    ASSERT_TRUE(enc_ctx);
-    ASSERT_TRUE(EVP_EncryptInit_ex(enc_ctx.get(), EVP_aes_128_cbc(), nullptr,
-                                   kKey, kIV));
-    ASSERT_TRUE(EVP_EncryptUpdate_ex(enc_ctx.get(), ciphertext, &ciphertext_len,
-                                     sizeof(ciphertext), in, 10));
-    ASSERT_TRUE(EVP_EncryptFinal_ex2(enc_ctx.get(), ciphertext + ciphertext_len,
-                                     &final_len,
-                                     sizeof(ciphertext) - ciphertext_len));
-    ciphertext_len += final_len;
-
     bssl::UniquePtr<EVP_CIPHER_CTX> ctx(EVP_CIPHER_CTX_new());
     ASSERT_TRUE(ctx);
     ASSERT_TRUE(
         EVP_DecryptInit_ex(ctx.get(), EVP_aes_128_cbc(), nullptr, kKey, kIV));
-    ASSERT_TRUE(EVP_DecryptUpdate_ex(ctx.get(), out, &out_len, sizeof(out),
-                                     ciphertext, ciphertext_len));
-    // Calling EVP_DecryptFinal_ex2 with max_out_len = 5 (< payload size 10)
-    // fails with CIPHER_R_BUFFER_TOO_SMALL.
-    EXPECT_FALSE(EVP_DecryptFinal_ex2(ctx.get(), out, &out_len, 5));
+    uint8_t out[sizeof(plaintext)];
+    size_t len1, len2;
+    ASSERT_TRUE(EVP_DecryptUpdate_ex(ctx.get(), out, &len1, sizeof(out),
+                                     ciphertext, sizeof(ciphertext)));
+    // Calling EVP_DecryptFinal_ex2 with too small of a buffer.
+    EXPECT_FALSE(EVP_DecryptFinal_ex2(ctx.get(), out + len1, &len2, 0));
     EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER,
                             CIPHER_R_BUFFER_TOO_SMALL));
-    // The context is not poisoned; a subsequent call with sufficient output
-    // buffer succeeds.
-    EXPECT_TRUE(EVP_DecryptFinal_ex2(ctx.get(), out, &out_len, sizeof(out)));
-    EXPECT_EQ(out_len, 10u);
+    EXPECT_FALSE(EVP_DecryptFinal_ex2(ctx.get(), out + len1, &len2,
+                                      sizeof(out) - len1 - 1));
+    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER,
+                            CIPHER_R_BUFFER_TOO_SMALL));
+    // A subsequent call with sufficient output buffer succeeds.
+    ASSERT_TRUE(
+        EVP_DecryptFinal_ex2(ctx.get(), out + len1, &len2, sizeof(out) - len1));
+    EXPECT_EQ(Bytes(out + len1, len2), Bytes(Span(plaintext).subspan(len1)));
   }
 
   // DecryptFinal padding failure does not poison the context.
@@ -1520,9 +1575,10 @@ TEST(CipherTest, NonPoisoningErrors) {
   // next call, but as next call's padding will pass if the input string has
   // correct padding, the IV for the call after will be correct again,
   // therefore reading bad data once in their `unobfuscate` method will "fix
-  // itself" two calls later).
+  // itself" two calls later). See b/504728350.
   {
     uint8_t bad_ciphertext[16] = {0};
+    uint8_t out[16];
     int len;
 
     bssl::UniquePtr<EVP_CIPHER_CTX> ctx(EVP_CIPHER_CTX_new());
@@ -1536,98 +1592,10 @@ TEST(CipherTest, NonPoisoningErrors) {
     EXPECT_TRUE(
         ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER, CIPHER_R_BAD_DECRYPT));
 
-    // The context is not poisoned: a subsequent call returns
-    // CIPHER_R_BAD_DECRYPT rather than ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED.
+    // Subsequent calls continue to return CIPHER_R_BAD_DECRYPT.
     EXPECT_FALSE(EVP_DecryptFinal_ex(ctx.get(), out, &len));
     EXPECT_TRUE(
         ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER, CIPHER_R_BAD_DECRYPT));
-  }
-}
-
-TEST(CipherTest, PoisoningErrors) {
-  const uint8_t kKey[16] = {1, 2,  3,  4,  5,  6,  7,  8,
-                            9, 10, 11, 12, 13, 14, 15, 16};
-  const uint8_t kIV[16] = {0};
-  uint8_t in[32] = {0};
-  uint8_t out[64];
-  size_t out_len;
-
-  // A cipher whose `cipher_update` callback fails mid-operation.
-  EVP_CIPHER failing_update_cipher = {};
-  failing_update_cipher.block_size = 16;
-  failing_update_cipher.key_len = 16;
-  failing_update_cipher.iv_len = 16;
-  failing_update_cipher.init = [](EVP_CIPHER_CTX *ctx, const uint8_t *key,
-                                  const uint8_t *iv, int enc) { return 1; };
-  failing_update_cipher.cipher_update = [](EVP_CIPHER_CTX *ctx,
-                                           uint8_t *out_arg,
-                                           const uint8_t *in_arg, size_t len) {
-    OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_AES_KEY_SETUP_FAILED);
-    return 0;
-  };
-
-  {
-    bssl::UniquePtr<EVP_CIPHER_CTX> ctx(EVP_CIPHER_CTX_new());
-    ASSERT_TRUE(ctx);
-    ASSERT_TRUE(EVP_EncryptInit_ex(ctx.get(), &failing_update_cipher, nullptr,
-                                   kKey, kIV));
-    // EVP_EncryptUpdate_ex fails because the underlying cipher_update fails.
-    EXPECT_FALSE(EVP_EncryptUpdate_ex(ctx.get(), out, &out_len, sizeof(out), in,
-                                      sizeof(in)));
-    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER,
-                            CIPHER_R_AES_KEY_SETUP_FAILED));
-
-    // The context is poisoned: subsequent operations fail with
-    // ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED.
-    EXPECT_FALSE(EVP_EncryptUpdate_ex(ctx.get(), out, &out_len, sizeof(out), in,
-                                      sizeof(in)));
-    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER,
-                            ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED));
-
-    EXPECT_FALSE(EVP_EncryptFinal_ex2(ctx.get(), out, &out_len, sizeof(out)));
-    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER,
-                            ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED));
-
-    // Re-initializing the context clears the poison flag.
-    ASSERT_TRUE(EVP_EncryptInit_ex(ctx.get(), &failing_update_cipher, nullptr,
-                                   kKey, kIV));
-    EXPECT_FALSE(EVP_EncryptUpdate_ex(ctx.get(), out, &out_len, sizeof(out), in,
-                                      sizeof(in)));
-    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER,
-                            CIPHER_R_AES_KEY_SETUP_FAILED));
-  }
-
-  // A custom cipher whose `cipher_final` callback fails.
-  EVP_CIPHER failing_final_cipher = {};
-  failing_final_cipher.block_size = 1;
-  failing_final_cipher.key_len = 16;
-  failing_final_cipher.iv_len = 16;
-  failing_final_cipher.flags = EVP_CIPH_FLAG_CUSTOM_CIPHER;
-  failing_final_cipher.init = [](EVP_CIPHER_CTX *ctx, const uint8_t *key,
-                                 const uint8_t *iv, int enc) { return 1; };
-  failing_final_cipher.cipher_update = [](EVP_CIPHER_CTX *ctx, uint8_t *out_arg,
-                                          const uint8_t *in_arg,
-                                          size_t len) { return 1; };
-  failing_final_cipher.cipher_final = [](EVP_CIPHER_CTX *ctx) {
-    OPENSSL_PUT_ERROR(CIPHER, CIPHER_R_AES_KEY_SETUP_FAILED);
-    return 0;
-  };
-
-  {
-    bssl::UniquePtr<EVP_CIPHER_CTX> ctx(EVP_CIPHER_CTX_new());
-    ASSERT_TRUE(ctx);
-    ASSERT_TRUE(EVP_EncryptInit_ex(ctx.get(), &failing_final_cipher, nullptr,
-                                   kKey, kIV));
-    // EVP_EncryptFinal_ex2 fails because cipher_final fails.
-    EXPECT_FALSE(EVP_EncryptFinal_ex2(ctx.get(), out, &out_len, sizeof(out)));
-    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER,
-                            CIPHER_R_AES_KEY_SETUP_FAILED));
-
-    // The context is poisoned: subsequent operations fail with
-    // ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED.
-    EXPECT_FALSE(EVP_EncryptFinal_ex2(ctx.get(), out, &out_len, sizeof(out)));
-    EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_CIPHER,
-                            ERR_R_SHOULD_NOT_HAVE_BEEN_CALLED));
   }
 }
 
