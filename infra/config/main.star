@@ -1375,6 +1375,7 @@ both_builders(
     cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     properties = {
         "msvc_target": "x86",
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     },
 )
 
@@ -1388,6 +1389,7 @@ both_builders(
         "gclient_vars": {
             "windows_sdk_version": "uploaded:2024-01-11",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     },
 )
 both_builders(
@@ -1398,6 +1400,7 @@ both_builders(
             "CMAKE_BUILD_TYPE": "Release",
         },
         "msvc_target": "x86",
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     },
 )
 both_builders(
@@ -1412,6 +1415,7 @@ both_builders(
         "msvc_target": "x86",
         "run_ssl_tests": False,
         "sde": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     },
 )
 both_builders(
@@ -1420,6 +1424,7 @@ both_builders(
     properties = compile_only({
         "msvc_target": "x86",
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     }),
 )
 both_builders(
@@ -1431,6 +1436,7 @@ both_builders(
         "cmake_args": {
             "BUILD_SHARED_LIBS": "1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_SHARED,
     },
 )
 both_builders(
@@ -1443,6 +1449,7 @@ both_builders(
             "BUILD_SHARED_LIBS": "1",
         },
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_SHARED,
     },
 )
 both_builders(
@@ -1458,6 +1465,7 @@ both_builders(
             "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc /DOPENSSL_SMALL=1",
         },
         "msvc_target": "x86",
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     },
 )
 
@@ -1477,6 +1485,7 @@ both_builders(
             "CMAKE_C_FLAGS": "-m32 -msse2",
             "CMAKE_CXX_FLAGS": "-m32 -msse2",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     },
 )
 both_builders(
@@ -1495,6 +1504,7 @@ both_builders(
             "CMAKE_CXX_FLAGS": "-m32 -msse2",
         },
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     }),
 )
 
@@ -1504,6 +1514,7 @@ both_builders(
     cq_compile_only = WIN_HOST,  # Reduce CQ cycle times.
     properties = {
         "msvc_target": "x64",
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     },
 )
 
@@ -1517,6 +1528,7 @@ both_builders(
         "gclient_vars": {
             "windows_sdk_version": "uploaded:2024-01-11",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     },
 )
 
@@ -1531,6 +1543,7 @@ both_builders(
         "msvc_target": "x64",
         # Also build and test the Rust code.
         "rust": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     },
 )
 both_builders(
@@ -1545,6 +1558,7 @@ both_builders(
         "msvc_target": "x64",
         "run_ssl_tests": False,
         "sde": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     },
 )
 both_builders(
@@ -1553,6 +1567,7 @@ both_builders(
     properties = compile_only({
         "msvc_target": "x64",
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     }),
 )
 both_builders(
@@ -1564,6 +1579,7 @@ both_builders(
         "cmake_args": {
             "BUILD_SHARED_LIBS": "1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_SHARED,
     },
 )
 both_builders(
@@ -1576,6 +1592,7 @@ both_builders(
             "BUILD_SHARED_LIBS": "1",
         },
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_SHARED,
     },
 )
 both_builders(
@@ -1591,6 +1608,7 @@ both_builders(
             "CMAKE_CXX_FLAGS": "/DWIN32 /D_WINDOWS /EHsc /DOPENSSL_SMALL=1",
         },
         "msvc_target": "x64",
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     },
 )
 
@@ -1601,6 +1619,7 @@ both_builders(
     properties = {
         "clang": True,
         "msvc_target": "x64",
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     },
 )
 both_builders(
@@ -1610,6 +1629,7 @@ both_builders(
         "clang": True,
         "msvc_target": "x64",
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     }),
 )
 
@@ -1631,6 +1651,7 @@ both_builders(
             "checkout_nasm": False,
         },
         "msvc_target": "arm64",
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     }),
 )
 both_builders(
@@ -1652,6 +1673,7 @@ both_builders(
         },
         "msvc_target": "arm64",
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     }),
 )
 
@@ -1671,6 +1693,7 @@ both_builders(
             "checkout_nasm": False,
         },
         "msvc_target": "arm64",
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     }),
 )
 both_builders(
@@ -1690,6 +1713,7 @@ both_builders(
         },
         "msvc_target": "arm64",
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     }),
 )
 
