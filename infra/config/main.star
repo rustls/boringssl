@@ -1310,6 +1310,7 @@ both_builders(
         },
         # Also build and test the Rust code.
         "rust": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_STATIC,
     },
 )
 both_builders(
@@ -1321,6 +1322,7 @@ both_builders(
             "CMAKE_EXE_LINKER_FLAGS": "-Wl,-dead_strip",
             "CMAKE_SHARED_LINKER_FLAGS": "-Wl,-dead_strip",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_STATIC,
     },
 )
 both_builders(
@@ -1331,6 +1333,7 @@ both_builders(
             "CMAKE_C_FLAGS": "-DOPENSSL_SMALL=1",
             "CMAKE_CXX_FLAGS": "-DOPENSSL_SMALL=1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_STATIC,
     },
 )
 both_builders(
@@ -1341,6 +1344,7 @@ both_builders(
     cq_enabled = False,
     properties = compile_only({
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_STATIC,
     }),
 )
 both_builders(
@@ -1354,6 +1358,7 @@ both_builders(
         },
         # Also build and test the Rust code.
         "rust": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_STATIC,
     },
 )
 both_builders(
@@ -1361,6 +1366,7 @@ both_builders(
     MAC_ARM64_HOST,
     properties = compile_only({
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_STATIC,
     }),
 )
 both_builders(
