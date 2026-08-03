@@ -1667,30 +1667,10 @@ both_builders(
 )
 
 # TODO(crbug.com/540364710): Roll that flag to the other builds, then inline.
-# Already tested: linux, linux_shared, mac, mac_shared, win32, win64_shared.
+# Already tested: linux, linux_shared, mac, mac_shared, win32, win64_shared,
+# android_aarch64_fips_rel, win32_rel, win64_shared_rel.
 cq_builders(
-    "linux_tmp_try_out_cas",
-    # The Android FIPS configuration requires a newer device.
-    WALLEYE_HOST,
-    cq_enabled = False,
-    cq_compile_only = LINUX_HOST,
-    properties = {
-        # Now testing: "android_aarch64_fips_rel",
-        "android": True,
-        "cmake_args": {
-            "ANDROID_ABI": "arm64-v8a",
-            "ANDROID_PLATFORM": "android-24",
-            # FIPS mode on Android uses shared libraries.
-            "BUILD_SHARED_LIBS": "1",
-            "CMAKE_BUILD_TYPE": "RelWithAsserts",
-            "FIPS": "1",
-        },
-        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_SHARED,
-    },
-)
-
-cq_builders(
-    "mac_shared_tmp_try_out_cas",
+    "mac_tmp_try_out_cas",
     MAC_X86_64_HOST,
     cq_enabled = False,
     properties = compile_only({
@@ -1699,35 +1679,6 @@ cq_builders(
             "CMAKE_OSX_ARCHITECTURES": "arm64",
             "CMAKE_OSX_SYSROOT": "iphoneos",
         },
-        "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_SHARED,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_STATIC,
     }),
-)
-
-cq_builders(
-    "win_tmp_try_out_cas",
-    WIN_HOST,
-    cq_enabled = False,
-    properties = {
-        # Now tested: "win32_rel".
-        "msvc_target": "x86",
-        "cmake_args": {
-            "CMAKE_BUILD_TYPE": "Release",
-        },
-        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
-    },
-)
-
-cq_builders(
-    "win_shared_tmp_try_out_cas",
-    WIN_HOST,
-    cq_enabled = False,
-    properties = {
-        # Now tested: "win64_shared_rel".
-        "msvc_target": "x64",
-        "cmake_args": {
-            "CMAKE_BUILD_TYPE": "Release",
-            "BUILD_SHARED_LIBS": "1",
-        },
-        "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_SHARED,
-    },
 )
