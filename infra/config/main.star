@@ -1738,20 +1738,3 @@ both_builders(
         "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     }),
 )
-
-# TODO(crbug.com/540364710): Roll that flag to the other builds, then inline.
-# Already tested: linux, linux_shared, mac, mac_shared, win32, win64_shared,
-# android_aarch64_fips_rel, win32_rel, win64_shared_rel.
-cq_builders(
-    "mac_tmp_try_out_cas",
-    MAC_X86_64_HOST,
-    cq_enabled = False,
-    properties = compile_only({
-        # Now tested: "ios64".
-        "cmake_args": {
-            "CMAKE_OSX_ARCHITECTURES": "arm64",
-            "CMAKE_OSX_SYSROOT": "iphoneos",
-        },
-        "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_STATIC,
-    }),
-)
