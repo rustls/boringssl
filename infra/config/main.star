@@ -687,6 +687,7 @@ both_builders(
             "ANDROID_ABI": "arm64-v8a",
             "ANDROID_PLATFORM": "android-24",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -701,6 +702,7 @@ both_builders(
             "ANDROID_PLATFORM": "android-24",
             "CMAKE_BUILD_TYPE": "Release",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -718,6 +720,7 @@ both_builders(
             "CMAKE_BUILD_TYPE": "RelWithAsserts",
             "FIPS": "1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_SHARED,
     },
 )
 
@@ -737,6 +740,7 @@ both_builders(
             "CMAKE_BUILD_TYPE": "RelWithAsserts",
             "FIPS": "1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_SHARED,
     },
 )
 
@@ -756,6 +760,7 @@ both_builders(
             "CMAKE_BUILD_TYPE": "RelWithAsserts",
             "FIPS": "1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 
@@ -772,6 +777,7 @@ both_builders(
             "ANDROID_PLATFORM": "android-24",
         },
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
 
@@ -785,6 +791,7 @@ both_builders(
             "ANDROID_ABI": "armeabi-v7a",
             "ANDROID_PLATFORM": "android-24",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -805,6 +812,7 @@ both_builders(
             "CMAKE_C_FLAGS": "-DOPENSSL_NO_STATIC_NEON_FOR_TESTING=1",
             "CMAKE_CXX_FLAGS": "-DOPENSSL_NO_STATIC_NEON_FOR_TESTING=1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -822,6 +830,7 @@ both_builders(
             "CMAKE_BUILD_TYPE": "RelWithAsserts",
             "FIPS": "1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_SHARED,
     },
 )
 both_builders(
@@ -834,6 +843,7 @@ both_builders(
             "ANDROID_PLATFORM": "android-24",
         },
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
 
@@ -849,6 +859,7 @@ both_builders(
             "ANDROID_PLATFORM": "android-24",
             "CMAKE_BUILD_TYPE": "Release",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -862,6 +873,7 @@ both_builders(
             "ANDROID_PLATFORM": "android-24",
         },
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
 both_builders(
@@ -874,6 +886,7 @@ both_builders(
             "ANDROID_PLATFORM": "android-35",
             "CMAKE_BUILD_TYPE": "Release",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
 both_builders(
@@ -887,6 +900,7 @@ both_builders(
             "ANDROID_PLATFORM": "android-24",
         },
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
 
@@ -909,6 +923,7 @@ both_builders(
             "CMAKE_OSX_ARCHITECTURES": "arm64",
             "CMAKE_OSX_SYSROOT": "iphoneos",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_STATIC,
     }),
 )
 both_builders(
@@ -923,6 +938,7 @@ both_builders(
             "CMAKE_OSX_SYSROOT": "iphoneos",
         },
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_STATIC,
     }),
 )
 
