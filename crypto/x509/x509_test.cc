@@ -3673,6 +3673,32 @@ TEST(X509Test, MismatchAlgorithms) {
                           X509_R_SIGNATURE_ALGORITHM_MISMATCH));
 }
 
+TEST(X509Test, VerifyUnusedBits) {
+  UniquePtr<X509> cert(CertFromPEM(kLeafPEM));
+  ASSERT_TRUE(cert);
+  UniquePtr<X509> issuer(CertFromPEM(kIntermediatePEM));
+  ASSERT_TRUE(issuer);
+  UniquePtr<EVP_PKEY> pkey(X509_get_pubkey(issuer.get()));
+  ASSERT_TRUE(pkey);
+  ASSERT_TRUE(X509_verify(cert.get(), pkey.get()));
+
+  X509Impl *impl = FromOpaque(cert.get());
+  const uint8_t *data = ASN1_STRING_get0_data(impl->signature.get());
+  int len = ASN1_STRING_length(impl->signature.get());
+  ASSERT_TRUE(data);
+  ASSERT_GT(len, 0);
+
+  std::vector<uint8_t> sig_bytes(data, data + len);
+  sig_bytes[len - 1] &= 0xf0;  // Ensure lower bits are 0 for set1.
+  ASSERT_TRUE(ASN1_BIT_STRING_set1(impl->signature.get(), sig_bytes.data(),
+                                   sig_bytes.size(), 4));  // Set 4 unused bits.
+
+  ERR_clear_error();
+  EXPECT_FALSE(X509_verify(cert.get(), pkey.get()));
+  EXPECT_TRUE(ErrorEquals(ERR_get_error(), ERR_LIB_X509,
+                          X509_R_INVALID_BIT_STRING_BITS_LEFT));
+}
+
 // TODO(crbug.com/387737061): Test that this function can decrypt certificates
 // and CRLs, even though it leaves encrypted private keys alone.
 TEST(X509Test, PEMX509Info) {

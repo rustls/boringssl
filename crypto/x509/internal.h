@@ -469,6 +469,13 @@ int x509_verify_signature(const X509_ALGOR *sigalg,
                           const ASN1_BIT_STRING *signature,
                           Span<const uint8_t> in, EVP_PKEY *pkey);
 
+// x509_verify_signature_bytes behaves like `x509_verify_signature` but takes in
+// a span containing the signature bytes (without ASN.1 headers). It returns one
+// if the signature is valid and zero on error.
+int x509_verify_signature_bytes(const X509_ALGOR *sigalg,
+                                Span<const uint8_t> signature,
+                                Span<const uint8_t> in, EVP_PKEY *pkey);
+
 // x509_sign_to_bit_string signs `in` using `ctx` and saves the result in `out`.
 // It returns the length of the signature on success and zero on error.
 int x509_sign_to_bit_string(EVP_MD_CTX *ctx, ASN1_BIT_STRING *out,
