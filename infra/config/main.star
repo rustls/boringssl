@@ -939,6 +939,7 @@ both_builders(
         },
         # Also build and test the Rust code.
         "rust": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -948,6 +949,7 @@ both_builders(
         "cmake_args": {
             "CMAKE_BUILD_TYPE": "Release",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -961,6 +963,7 @@ both_builders(
         "prefixed_symbols": True,
         # Also build and test the Rust code.
         "rust": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
 both_builders(
@@ -976,6 +979,7 @@ both_builders(
             "CMAKE_CXX_FLAGS": "-m32 -msse2",
             "CMAKE_C_FLAGS": "-m32 -msse2",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -991,6 +995,7 @@ both_builders(
             "CMAKE_C_FLAGS": "-m32 -msse2",
             "CMAKE_CXX_FLAGS": "-m32 -msse2",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 
@@ -1012,6 +1017,7 @@ cq_builders(
         },
         "run_ssl_tests": False,
         "sde": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1028,6 +1034,7 @@ both_builders(
             "CMAKE_C_FLAGS": "-m32 -msse2",
             "CMAKE_CXX_FLAGS": "-m32 -msse2",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1044,6 +1051,7 @@ both_builders(
             "CMAKE_C_FLAGS": "-m32 -msse2",
         },
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
 both_builders(
@@ -1055,6 +1063,7 @@ both_builders(
         "cmake_args": {
             "CFI": "1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1065,6 +1074,7 @@ both_builders(
         "cmake_args": {
             "CMAKE_BUILD_TYPE": "Release",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1081,6 +1091,7 @@ both_builders(
         "gclient_vars": {
             "checkout_libcxx": True,
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1101,6 +1112,7 @@ both_builders(
         # SSL tests are all single-threaded, so running them under TSan is a
         # waste of time.
         "run_ssl_tests": False,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1113,6 +1125,7 @@ both_builders(
             "CMAKE_BUILD_TYPE": "RelWithAsserts",
             "UBSAN": "1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1122,6 +1135,7 @@ both_builders(
         "cmake_args": {
             "FIPS": "1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1132,6 +1146,7 @@ both_builders(
             "CMAKE_BUILD_TYPE": "Release",
             "FIPS": "1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1142,6 +1157,7 @@ both_builders(
         "cmake_args": {
             "FIPS": "1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1153,6 +1169,7 @@ both_builders(
             "CMAKE_BUILD_TYPE": "Release",
             "FIPS": "1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1165,6 +1182,7 @@ both_builders(
             "FIPS": "1",
             "OPENSSL_NO_ASM": "1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1179,6 +1197,7 @@ both_builders(
         "gclient_vars": {
             "checkout_fuzzer": True,
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1190,6 +1209,7 @@ both_builders(
             "ASAN": "1",
             "OPENSSL_NO_ASM": "1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1201,6 +1221,7 @@ both_builders(
     properties = compile_only({
         "clang": True,
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
 
@@ -1212,6 +1233,7 @@ both_builders(
             "CMAKE_C_FLAGS": "-DOPENSSL_NO_THREADS_CORRUPT_MEMORY_AND_LEAK_SECRETS_IF_THREADED=1",
             "CMAKE_CXX_FLAGS": "-DOPENSSL_NO_THREADS_CORRUPT_MEMORY_AND_LEAK_SECRETS_IF_THREADED=1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1225,6 +1247,7 @@ both_builders(
         },
         "run_ssl_tests": False,
         "sde": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1234,6 +1257,7 @@ both_builders(
         "cmake_args": {
             "BUILD_SHARED_LIBS": "1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_SHARED,
     },
 )
 both_builders(
@@ -1244,6 +1268,7 @@ both_builders(
             "CMAKE_C_FLAGS": "-DOPENSSL_SMALL=1",
             "CMAKE_CXX_FLAGS": "-DOPENSSL_SMALL=1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1254,6 +1279,7 @@ both_builders(
             "OPENSSL_NO_ASM": "1",
             "OPENSSL_NO_SSE2_FOR_TESTING": "1",
         },
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
 both_builders(
@@ -1265,6 +1291,7 @@ both_builders(
             "OPENSSL_NO_SSE2_FOR_TESTING": "1",
         },
         "prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
 
