@@ -402,9 +402,8 @@ func addServerCertTypeTests() {
 				expectations: connectionExpectations{
 					peerCertificate: expectedServerCredential,
 				},
-				shimCredentials:    test.serverCredentialsConfigured,
-				resumeSession:      true,
-				skipSplitHandshake: true,
+				shimCredentials: test.serverCredentialsConfigured,
+				resumeSession:   true,
 			}
 			// Test that the server can defer configuring credentials to the cert
 			// callback.
@@ -926,7 +925,6 @@ func addClientCertTypeTests() {
 					expectedError:      test.expectedError,
 					expectedLocalError: test.expectedLocalError,
 					resumeSession:      test.expectedError == "" && test.expectedLocalError == "",
-					skipSplitHandshake: true,
 				})
 			}
 		}
@@ -952,10 +950,9 @@ func addClientCertTypeTests() {
 					ExpectClientCertificateTypes: certTypesListRPKOnly,
 				},
 			},
-			flags:              shimFlags,
-			skipSplitHandshake: true,
-			shouldFail:         true,
-			expectedError:      expectedError,
+			flags:         shimFlags,
+			shouldFail:    true,
+			expectedError: expectedError,
 		})
 		shimFlags = append([]string{"-verify-peer"},
 			flagCertTypes("-accepted-peer-cert-types", certTypesListRPKOnly)...)
@@ -976,8 +973,7 @@ func addClientCertTypeTests() {
 					SkipCertificateVerify:        true,
 				},
 			},
-			flags:              shimFlags,
-			skipSplitHandshake: true,
+			flags: shimFlags,
 		})
 		if ver.version >= VersionTLS13 {
 			// If the client sends an otherwise valid Certificate message with an RPK,
@@ -999,7 +995,6 @@ func addClientCertTypeTests() {
 				flags:              shimFlags,
 				shouldFail:         true,
 				expectedLocalError: "remote error: unexpected message",
-				skipSplitHandshake: true,
 			})
 		}
 		// Test that RPK client cert verification fails if we force it to fail.
@@ -1017,10 +1012,9 @@ func addClientCertTypeTests() {
 					ExpectClientCertificateTypes: certTypesListRPKOnly,
 				},
 			},
-			flags:              shimFlags,
-			shouldFail:         true,
-			expectedError:      ":CERTIFICATE_VERIFY_FAILED:",
-			skipSplitHandshake: true,
+			flags:         shimFlags,
+			shouldFail:    true,
+			expectedError: ":CERTIFICATE_VERIFY_FAILED:",
 		})
 	}
 }
