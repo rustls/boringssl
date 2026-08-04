@@ -656,7 +656,7 @@ def finished_output_files(exe_suffix, lib_prefix, lib_suffix):
     return outputs
 
 FINISHED_OUTPUT_FILES_LINUX_STATIC = finished_output_files("", "lib", ".a")
-FINISHED_OUTPUT_FILES_LINUX_SHARED = finished_output_files("", "lib", ".so")
+FINISHED_OUTPUT_FILES_LINUX_SHARED = finished_output_files("", "lib", ".so*")
 FINISHED_OUTPUT_FILES_WIN_STATIC = finished_output_files(".exe", "", ".lib")
 FINISHED_OUTPUT_FILES_WIN_SHARED = finished_output_files(".exe", "", ".dll")
 FINISHED_OUTPUT_FILES_MAC_STATIC = finished_output_files("", "lib", ".a")
