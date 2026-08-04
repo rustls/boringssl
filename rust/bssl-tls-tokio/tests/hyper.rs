@@ -16,11 +16,14 @@
 
 use bssl_tls::alpn::H2;
 use bssl_tls::context::TlsContextBuilder;
-use bssl_tls::credentials::{Certificate, TlsCredentialBuilder};
-use bssl_tls_tokio::TokioTlsExt;
+use bssl_tls::credentials::{Certificate, TlsCredential, TlsCredentialBuilder};
 use bssl_tls_tokio::hyper::HyperBsslConnector;
+use bssl_tls_tokio::TokioTlsExt;
 use bssl_x509::{
-    certificates::X509Certificate, keys::PrivateKey, params::Trust, store::X509StoreBuilder,
+    certificates::X509Certificate,
+    keys::PrivateKey,
+    params::Trust,
+    store::{X509Store, X509StoreBuilder},
 };
 use hyper::body::{Body, Bytes, Frame};
 use hyper::service::service_fn;
@@ -35,6 +38,29 @@ use tower::Service;
 const CA: &[u8] = include_bytes!("../../test-data/BoringSSLCATest.crt");
 const RSA_SERVER_CERT: &[u8] = include_bytes!("../../test-data/BoringSSLServerTest-RSA.crt");
 const RSA_SERVER_KEY: &[u8] = include_bytes!("../../test-data/BoringSSLServerTest-RSA.key");
+
+fn server_credential() -> TlsCredential {
+    let ca = Certificate::parse_one_from_pem(CA, None).unwrap();
+    let server_cert = Certificate::parse_one_from_pem(RSA_SERVER_CERT, None).unwrap();
+    let server_key = PrivateKey::from_pem(RSA_SERVER_KEY, || unreachable!()).unwrap();
+    let mut builder = TlsCredentialBuilder::new();
+    builder
+        .with_certificate_chain(&[server_cert, ca])
+        .unwrap()
+        .with_private_key(server_key)
+        .unwrap();
+    builder.build().unwrap()
+}
+
+fn client_cert_store() -> X509Store {
+    let mut store = X509StoreBuilder::new();
+    store
+        .set_trust(Trust::SslServer)
+        .unwrap()
+        .add_cert(X509Certificate::parse_one_from_pem(CA).unwrap())
+        .unwrap();
+    store.build()
+}
 
 /// A body that yields a single data frame, or is empty.
 struct SimpleBody(Option<Bytes>);
@@ -94,20 +120,10 @@ async fn test_hyper_h2_roundtrip() {
     let addr = listener.local_addr().unwrap();
 
     // Set up the TLS server context.
-    let ca = Certificate::parse_one_from_pem(CA, None).unwrap();
-    let server_cert = Certificate::parse_one_from_pem(RSA_SERVER_CERT, None).unwrap();
-    let server_key = PrivateKey::from_pem(RSA_SERVER_KEY, || unreachable!()).unwrap();
     let mut server_ctx_builder = TlsContextBuilder::new_tls();
-    let server_cred = {
-        let mut builder = TlsCredentialBuilder::new();
-        builder
-            .with_certificate_chain(&[server_cert, ca])
-            .unwrap()
-            .with_private_key(server_key)
-            .unwrap();
-        builder.build().unwrap()
-    };
-    server_ctx_builder.with_credential(server_cred).unwrap();
+    server_ctx_builder
+        .with_credential(server_credential())
+        .unwrap();
     server_ctx_builder.set_alpn_protocols([H2]).unwrap();
     let acceptor = server_ctx_builder.build_tokio_acceptor();
 
@@ -134,13 +150,7 @@ async fn test_hyper_h2_roundtrip() {
         let mock_connector = MockTcpConnector { addr };
 
         let mut client_ctx_builder = TlsContextBuilder::new_tls();
-        let mut cert_store = X509StoreBuilder::new();
-        cert_store
-            .set_trust(Trust::SslServer)
-            .unwrap()
-            .add_cert(X509Certificate::parse_one_from_pem(CA).unwrap())
-            .unwrap();
-        client_ctx_builder.with_certificate_store(&cert_store.build());
+        client_ctx_builder.with_certificate_store(&client_cert_store());
         client_ctx_builder.set_alpn_protocols([H2]).unwrap();
         let connector = client_ctx_builder.build_tokio_connector();
 

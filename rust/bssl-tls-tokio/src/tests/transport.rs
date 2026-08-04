@@ -32,9 +32,16 @@ use crate::{
 };
 
 fn dumb_server_client() -> (TlsConnection<Server>, TlsConnection<Client>) {
-    let (server_builder, client_builder) = super::tls_ctx_builders();
+    use bssl_tls::context::TlsContextBuilder;
+
+    let mut server_builder = TlsContextBuilder::new_tls();
+    server_builder.with_credential(super::server_credential()).unwrap();
     let server_conn = server_builder.build().new_server_connection().build();
+
+    let mut client_builder = TlsContextBuilder::new_tls();
+    client_builder.with_certificate_store(&super::client_cert_store());
     let client_conn = client_builder.build().new_client_connection().build();
+
     (server_conn, client_conn)
 }
 

@@ -20,47 +20,39 @@ const CA: &[u8] = include_bytes!("../../test-data/BoringSSLCATest.crt");
 const RSA_SERVER_CERT: &[u8] = include_bytes!("../../test-data/BoringSSLServerTest-RSA.crt");
 const RSA_SERVER_KEY: &[u8] = include_bytes!("../../test-data/BoringSSLServerTest-RSA.key");
 
-use bssl_tls::{
-    context::TlsContextBuilder,
-    credentials::{
-        Certificate,
-        TlsCredentialBuilder, //
-    },
+use bssl_tls::credentials::{
+    Certificate,
+    TlsCredential,
+    TlsCredentialBuilder, //
 };
 use bssl_x509::{
     certificates::X509Certificate,
     keys::PrivateKey,
     params::Trust,
-    store::X509StoreBuilder, //
+    store::{X509Store, X509StoreBuilder}, //
 };
 
-/// Returns a `(server_ctx_builder, client_ctx_builder)` pair with certs/keys
-/// pre-configured for TLS testing.
-fn tls_ctx_builders() -> (TlsContextBuilder, TlsContextBuilder) {
+/// Returns a server credential with the test certificate chain and private key.
+fn server_credential() -> TlsCredential {
     let ca = Certificate::parse_one_from_pem(CA, None).unwrap();
     let server_cert = Certificate::parse_one_from_pem(RSA_SERVER_CERT, None).unwrap();
     let server_key = PrivateKey::from_pem(RSA_SERVER_KEY, || unreachable!()).unwrap();
+    let mut builder = TlsCredentialBuilder::new();
+    builder
+        .with_certificate_chain(&[server_cert, ca])
+        .unwrap()
+        .with_private_key(server_key)
+        .unwrap();
+    builder.build().unwrap()
+}
 
-    let mut server_builder = TlsContextBuilder::new_tls();
-    let server_cred = {
-        let mut builder = TlsCredentialBuilder::new();
-        builder
-            .with_certificate_chain(&[server_cert, ca])
-            .unwrap()
-            .with_private_key(server_key)
-            .unwrap();
-        builder.build().unwrap()
-    };
-    server_builder.with_credential(server_cred).unwrap();
-
-    let mut client_builder = TlsContextBuilder::new_tls();
-    let mut cert_store = X509StoreBuilder::new();
-    cert_store
+/// Returns a certificate store trusting the test CA.
+fn client_cert_store() -> X509Store {
+    let mut store = X509StoreBuilder::new();
+    store
         .set_trust(Trust::SslServer)
         .unwrap()
         .add_cert(X509Certificate::parse_one_from_pem(CA).unwrap())
         .unwrap();
-    client_builder.with_certificate_store(&cert_store.build());
-
-    (server_builder, client_builder)
+    store.build()
 }

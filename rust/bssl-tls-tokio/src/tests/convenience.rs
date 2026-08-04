@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use bssl_tls::context::TlsContextBuilder;
+
 use tokio::io::{
     AsyncReadExt,
     AsyncWriteExt, //
@@ -21,9 +23,13 @@ use crate::TokioTlsExt;
 
 #[tokio::test]
 async fn high_level_tokio() -> Result<(), bssl_tls::errors::Error> {
-    let (server_builder, client_builder) = super::tls_ctx_builders();
-    let connector = client_builder.build_tokio_connector();
+    let mut server_builder = TlsContextBuilder::new_tls();
+    server_builder.with_credential(super::server_credential())?;
     let acceptor = server_builder.build_tokio_acceptor();
+
+    let mut client_builder = TlsContextBuilder::new_tls();
+    client_builder.with_certificate_store(&super::client_cert_store());
+    let connector = client_builder.build_tokio_connector();
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
