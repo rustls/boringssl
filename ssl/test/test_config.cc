@@ -528,7 +528,6 @@ const Flag<TestConfig> *FindFlag(const char *name) {
         StringFlag("-expect-msg-callback", &TestConfig::expect_msg_callback),
         BoolFlag("-allow-false-start-without-alpn",
                  &TestConfig::allow_false_start_without_alpn),
-        BoolFlag("-handoff", &TestConfig::handoff),
         BoolFlag("-handshake-hints", &TestConfig::handshake_hints),
         BoolFlag("-allow-hint-mismatch", &TestConfig::allow_hint_mismatch),
         BoolFlag("-use-ocsp-callback", &TestConfig::use_ocsp_callback),

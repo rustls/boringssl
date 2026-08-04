@@ -217,7 +217,6 @@ struct TestConfig {
   bool use_custom_verify_callback = false;
   std::string expect_msg_callback;
   bool allow_false_start_without_alpn = false;
-  bool handoff = false;
   bool handshake_hints = false;
   bool allow_hint_mismatch = false;
   bool use_ocsp_callback = false;

@@ -33,8 +33,6 @@ struct SettingsWriter {
   // Commit writes the buffered data to disk.
   bool Commit();
 
-  bool WriteHandoff(bssl::Span<const uint8_t> handoff);
-  bool WriteHandback(bssl::Span<const uint8_t> handback);
   bool WriteHints(bssl::Span<const uint8_t> hints);
 
  private:
