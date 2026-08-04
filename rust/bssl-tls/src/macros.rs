@@ -94,14 +94,13 @@ macro_rules! crypto_buffer_wrapper {
                     )
                 };
                 if data.is_null() || len == 0 || len > isize::MAX as usize {
-                    &[]
-                } else {
-                    unsafe {
-                        // Safety:
-                        // - `data` is 1-size and 1-align and `len` is valid by BoringSSL invariant.
-                        // - `len` is sanitised to be within bound.
-                        ::core::slice::from_raw_parts(data, len)
-                    }
+                    return &[]
+                }
+                unsafe {
+                    // Safety:
+                    // - `data` is 1-size and 1-align and `len` is valid by BoringSSL invariant.
+                    // - `len` is sanitised to be within bound.
+                    $crate::ffi::sanitize_slice(data, len).unwrap_or(&[])
                 }
             }
         }
