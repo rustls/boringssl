@@ -61,10 +61,14 @@ mod transport;
 pub(crate) const CA: &[u8] = include_bytes!("../../test-data/BoringSSLCATest.crt");
 pub(crate) const RSA_SERVER_CERT: &[u8] =
     include_bytes!("../../test-data/BoringSSLServerTest-RSA.crt");
+pub(crate) const RSA_SERVER_CERT_DER: &[u8] =
+    include_bytes!("../../test-data/BoringSSLServerTest-RSA-Cert.der");
 pub(crate) const RSA_SERVER_KEY: &[u8] =
     include_bytes!("../../test-data/BoringSSLServerTest-RSA.key");
 pub(crate) const P256_SERVER_CERT: &[u8] =
     include_bytes!("../../test-data/BoringSSLServerTest-ECDSA-P256.crt");
+pub(crate) const P256_SERVER_CERT_DER: &[u8] =
+    include_bytes!("../../test-data/BoringSSLServerTest-ECDSA-P256-Cert.der");
 pub(crate) const P256_SERVER_KEY: &[u8] =
     include_bytes!("../../test-data/BoringSSLServerTest-ECDSA-P256.key");
 pub(crate) const P256_SERVER_KEY_DER: &[u8] =

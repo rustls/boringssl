@@ -45,8 +45,12 @@ use crate::{
     },
     errors::Error,
     tests::{
+        P256_SERVER_CERT,
+        P256_SERVER_CERT_DER,
         P256_SERVER_KEY,
         P256_SERVER_KEY_DER,
+        RSA_SERVER_CERT,
+        RSA_SERVER_CERT_DER,
         TEST_CA_DN,
         create_mock_pipe,
         load_trust_store,
@@ -63,51 +67,40 @@ fn parse_none() {
 
 #[test]
 fn parse_one() {
-    const PEM: &'_ [u8] = b"
-Hello world!
------BEGIN CERTIFICATE-----
-SGVsbG8gV29ybGQh
------END CERTIFICATE-----
-";
-    let certs = Certificate::parse_all_from_pem(PEM, None).unwrap();
+    let pem = [b"extra data\n", P256_SERVER_CERT, b"\nextra data\n"].concat();
+    let certs = Certificate::parse_all_from_pem(&pem, None).unwrap();
     assert_eq!(certs.len(), 1);
-    assert_eq!(certs[0].as_der_bytes(), b"Hello World!");
+    assert_eq!(certs[0].as_der_bytes(), P256_SERVER_CERT_DER);
 }
 
 #[test]
 fn parse_all_pems() {
-    const PEM: &'_ [u8] = b"
-Hello world!
------BEGIN CERTIFICATE-----
-SGVsbG8gV29ybGQh
------END CERTIFICATE-----
-BoringSSL is ...
------BEGIN CERTIFICATE-----
-QXdlc29tZSBCb3JpbmdTU0wh
------END CERTIFICATE-----
-Trailing bits ...
-";
-    let certs = Certificate::parse_all_from_pem(PEM, None).unwrap();
+    let pem = [
+        b"extra data\n",
+        P256_SERVER_CERT,
+        b"\nextra data\n",
+        RSA_SERVER_CERT,
+        b"\nextra data\n",
+    ]
+    .concat();
+    let certs = Certificate::parse_all_from_pem(&pem, None).unwrap();
     assert_eq!(certs.len(), 2);
-    assert_eq!(certs[0].as_der_bytes(), b"Hello World!");
-    assert_eq!(certs[1].as_der_bytes(), b"Awesome BoringSSL!");
+    assert_eq!(certs[0].as_der_bytes(), P256_SERVER_CERT_DER);
+    assert_eq!(certs[1].as_der_bytes(), RSA_SERVER_CERT_DER);
 }
 
 #[test]
 fn parse_all_pems_fail() {
-    const PEM: &'_ [u8] = b"
-Hello world!
------BEGIN CERTIFICATE-----
-SGVsbG8gV29ybGQh
------END CERTIFICATE-----
-BoringSSL is ...
------BEGIN CERTIFICATE-----
-QXdlc29tZSBCb3JpbmdTU0wh
------END CERTIFICATE-----
-But something badddd...
------BEGIN CERTIFICATE-----
-";
-    let _ = Certificate::parse_all_from_pem(PEM, None).unwrap_err();
+    let pem = [
+        b"extra data\n",
+        P256_SERVER_CERT,
+        b"\nextra data\n",
+        RSA_SERVER_CERT,
+        // Invalid PEM block.
+        b"\n-----BEGIN CERTIFICATE-----\n",
+    ]
+    .concat();
+    let _ = Certificate::parse_all_from_pem(&pem, None).unwrap_err();
 }
 
 #[test]
