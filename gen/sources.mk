@@ -2876,6 +2876,14 @@ boringssl_rust_bssl_macros_sources := \
 boringssl_rust_bssl_sys_sources := \
   rust/bssl-sys/src/lib.rs
 
+boringssl_rust_bssl_tls_tokio_sources := \
+  rust/bssl-tls-tokio/src/hyper.rs \
+  rust/bssl-tls-tokio/src/lib.rs \
+  rust/bssl-tls-tokio/src/tests.rs \
+  rust/bssl-tls-tokio/src/tests/convenience.rs \
+  rust/bssl-tls-tokio/src/tests/datagram.rs \
+  rust/bssl-tls-tokio/src/tests/transport.rs
+
 boringssl_rust_bssl_x509_sources := \
   rust/bssl-x509/src/certificates.rs \
   rust/bssl-x509/src/errors.rs \

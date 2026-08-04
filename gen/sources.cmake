@@ -2973,6 +2973,17 @@ set(
 )
 
 set(
+  RUST_BSSL_TLS_TOKIO_SOURCES
+
+  rust/bssl-tls-tokio/src/hyper.rs
+  rust/bssl-tls-tokio/src/lib.rs
+  rust/bssl-tls-tokio/src/tests.rs
+  rust/bssl-tls-tokio/src/tests/convenience.rs
+  rust/bssl-tls-tokio/src/tests/datagram.rs
+  rust/bssl-tls-tokio/src/tests/transport.rs
+)
+
+set(
   RUST_BSSL_X509_SOURCES
 
   rust/bssl-x509/src/certificates.rs

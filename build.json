@@ -1123,6 +1123,12 @@
             "rust/bssl-x509/src/*.rs"
         ]
     },
+    "rust_bssl_tls_tokio": {
+        "srcs": [
+            "rust/bssl-tls-tokio/src/*.rs",
+            "rust/bssl-tls-tokio/src/*/*.rs"
+        ]
+    },
     "modulewrapper": {
         "srcs": [
             "util/fipstools/acvp/modulewrapper/main.cc",
