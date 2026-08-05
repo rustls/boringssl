@@ -1014,9 +1014,7 @@ both_builders(
         "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     },
 )
-
-# TODO(crbug.com/537679390): Back to both_builders once it works manually again!
-cq_builders(
+both_builders(
     "linux32_sde",
     LINUX_HOST,
     cq_enabled = False,
