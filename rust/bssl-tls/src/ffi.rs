@@ -23,14 +23,13 @@ use core::{
         NonNull,
         null,
         null_mut, //
-    },
-    slice::{
-        from_raw_parts,
-        from_raw_parts_mut, //
     }, //
 };
 
-use bssl_crypto::FfiSlice;
+use bssl_crypto::{
+    FfiSlice,
+    FromFfiSlice, //
+};
 
 use crate::{
     context::CertificateCache,
@@ -66,50 +65,6 @@ impl<T> Drop for Alloc<T> {
             // Safety: `self.0` is still valid at dropping, even if it is `NULL`.
             bssl_sys::OPENSSL_free(self.0 as _);
         }
-    }
-}
-
-/// Sanitize the data pointer and length and reconstitute the slice.
-///
-/// This method returns an empty slice if the length is 0 or the pointer is NULL.
-/// # Safety
-/// Caller must ensure that `'a` outlives `input`.
-#[inline]
-pub(crate) unsafe fn sanitize_slice<'a, T>(input: *const T, len: usize) -> Option<&'a [T]> {
-    if len == 0 || input.is_null() {
-        return Some(&[]);
-    }
-    if !input.is_aligned() || len.checked_mul(size_of::<T>())? > isize::MAX as usize {
-        return None;
-    }
-    unsafe {
-        // Safety: the pointer and the size has been sanitised.
-        Some(from_raw_parts(input, len))
-    }
-}
-
-/// Sanitize the data pointer and length and reconstitute the mutable slice.
-///
-/// `capacity` counts the number of `T`s that `out` can hold, **not number of bytes**.
-///
-/// This method returns an empty slice if the length is 0 or the pointer is NULL.
-/// # Safety
-/// Caller must ensure that `'a` outlives `input`.
-#[inline]
-pub(crate) unsafe fn sanitise_mut_byteslice<'a>(
-    out: *mut u8,
-    capacity: usize,
-) -> Option<&'a mut [u8]> {
-    if capacity == 0 || out.is_null() {
-        return Some(&mut []);
-    }
-    if capacity > isize::MAX as usize {
-        return None;
-    }
-    unsafe {
-        // Safety: `out` is 1-aligned and `0` is a valid pattern for `u8`.
-        core::ptr::write_bytes(out, 0, capacity);
-        Some(from_raw_parts_mut(out, capacity))
     }
 }
 
@@ -253,7 +208,7 @@ impl<'a> ReceiveBuffer<'a> {
         unsafe {
             // Safety: `self` still exclusively owns the buffer region and the range of bytes
             // is known to be initialised by us. See `advance`.
-            sanitize_slice(self.ptr, self.cursor).unwrap_or(&[])
+            u8::from_ffi_ptr(self.ptr, self.cursor)
         }
     }
 

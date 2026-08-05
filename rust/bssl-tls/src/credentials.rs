@@ -40,6 +40,7 @@ use core::{
     }, //
 };
 
+use bssl_crypto::FromFfiSlice;
 use bssl_x509::{
     errors::PemReason,
     keys::{PrivateKey, PublicKey},
@@ -68,7 +69,6 @@ use crate::{
         CryptoBufferWrapper,
         Stack,
         StackIterator,
-        sanitize_slice,
         slice_into_ffi_raw_parts, //
     },
     has_duplicates, //
@@ -444,7 +444,7 @@ impl TlsCredential {
         }
         unsafe {
             // Safety: `id_ptr` will be outlived by `self`.
-            sanitize_slice(id_ptr, id_len)
+            Some(u8::from_ffi_ptr(id_ptr, id_len))
         }
     }
 }
@@ -553,12 +553,10 @@ impl Certificate {
             if buf.to_bytes() != b"CERTIFICATE" {
                 continue;
             }
-            let Some(contents) = (unsafe {
+            let contents = unsafe {
                 // Safety: the slice is only used within the loop and we will copy the contents
                 // when constructing the certificate object.
-                sanitize_slice(data.0, len)
-            }) else {
-                return Err(Error::Io(IoError::TooLong));
+                u8::from_ffi_ptr(data.0, len)
             };
             let cert = Certificate::from_bytes(contents, cache)?;
             return Ok((cert, eof));
@@ -576,7 +574,7 @@ impl Certificate {
         };
         unsafe {
             // Safety: `data` will be outlived by `self`
-            sanitize_slice(data, len).expect("buffer is too large")
+            u8::from_ffi_ptr(data, len)
         }
     }
 }
@@ -817,7 +815,7 @@ impl VerifyCertificateContext {
             core::mem::transmute(call_slice_getter!(
                 bssl_sys::SSL_get0_ech_name_override,
                 self.ptr()
-            )?)
+            ))
         };
         if name.is_empty() || !name.is_ascii() {
             return None;
@@ -834,7 +832,7 @@ impl VerifyCertificateContext {
     /// [RFC 2560]: <https://datatracker.ietf.org/doc/html/rfc6960>
     pub fn get_ocsp_response(&self) -> Option<&[u8]> {
         // Safety: response, when it exists, is outlived by the connection.
-        let response = call_slice_getter!(bssl_sys::SSL_get0_ocsp_response, self.ptr())?;
+        let response = call_slice_getter!(bssl_sys::SSL_get0_ocsp_response, self.ptr());
         (!response.is_empty()).then_some(response)
     }
 
@@ -843,7 +841,7 @@ impl VerifyCertificateContext {
     /// [RFC 6962]: <https://datatracker.ietf.org/doc/html/rfc6962#section-3.2>
     pub fn get_signed_cert_timestamp_list(&self) -> Option<&[u8]> {
         // Safety: list, when it exists, is outlived by the connection.
-        let list = call_slice_getter!(bssl_sys::SSL_get0_signed_cert_timestamp_list, self.ptr())?;
+        let list = call_slice_getter!(bssl_sys::SSL_get0_signed_cert_timestamp_list, self.ptr());
         (!list.is_empty()).then_some(list)
     }
 
