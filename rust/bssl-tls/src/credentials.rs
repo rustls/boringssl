@@ -355,6 +355,7 @@ impl<M> TlsCredentialBuilder<M> {
 ///
 /// [RFC 9258]: <https://datatracker.ietf.org/doc/html/rfc9258#section-5.1>
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[non_exhaustive]
 pub enum PskHash {
     /// SHA-256
     Sha256,
@@ -755,6 +756,7 @@ bssl_macros::bssl_enum! {
     ///
     /// [IANA]: https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-16
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    #[non_exhaustive]
     pub enum SignatureAlgorithm: u16 {
         /// IANA entry `rsa_pkcs1_sha256`
         RsaPkcs1Sha256 = bssl_sys::SSL_SIGN_RSA_PKCS1_SHA256 as u16,
@@ -1113,6 +1115,7 @@ bssl_macros::bssl_enum! {
     ///
     /// [IANA]: https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#tls-extensiontype-values-3
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    #[non_exhaustive]
     pub enum CertificateType: u8 {
         /// X.509 certificate type.
         X509 = bssl_sys::TLSEXT_cert_type_x509 as u8,

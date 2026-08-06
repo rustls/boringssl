@@ -179,6 +179,7 @@ bssl_macros::bssl_enum! {
     ///
     /// [RFC 5246]: <https://datatracker.ietf.org/doc/html/rfc5246#section-7.4.4>
     #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+    #[non_exhaustive]
     pub enum RequestedCertificateType: u8 {
         /// RSA signed certificate.
         RsaSign = 1,
