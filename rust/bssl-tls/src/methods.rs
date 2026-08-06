@@ -29,11 +29,11 @@ pub(crate) unsafe extern "C" fn drop_box_rust_methods<M>(
     _argl: c_long,
     _argp: *mut c_void,
 ) {
+    if ptr.is_null() {
+        return;
+    }
     abort_on_panic(move || {
         let _ = unsafe {
-            if ptr.is_null() {
-                return;
-            }
             // Safety: the data was boxed and stored via SSL_CTX_set_ex_data.
             Box::from_raw(ptr as *mut M)
         };
