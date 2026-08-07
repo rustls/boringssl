@@ -5833,6 +5833,9 @@ OPENSSL_EXPORT const COMP_METHOD *SSL_get_current_expansion(SSL *ssl);
 // SSL_get_server_tmp_key returns zero.
 OPENSSL_EXPORT int SSL_get_server_tmp_key(SSL *ssl, EVP_PKEY **out_key);
 
+// SSL_get_peer_tmp_key returns zero.
+OPENSSL_EXPORT int SSL_get_peer_tmp_key(SSL *ssl, EVP_PKEY **out_key);
+
 // SSL_CTX_set_tmp_dh returns 1.
 OPENSSL_EXPORT int SSL_CTX_set_tmp_dh(SSL_CTX *ctx, const DH *dh);
 

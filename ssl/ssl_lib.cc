@@ -2675,6 +2675,8 @@ const COMP_METHOD *SSL_get_current_expansion(SSL *ssl) { return nullptr; }
 
 int SSL_get_server_tmp_key(SSL *ssl, EVP_PKEY **out_key) { return 0; }
 
+int SSL_get_peer_tmp_key(SSL *ssl, EVP_PKEY **out_key) { return 0; }
+
 void SSL_CTX_set_quiet_shutdown(SSL_CTX *ctx, int mode) {
   FromOpaque(ctx)->quiet_shutdown = (mode != 0);
 }
