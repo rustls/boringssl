@@ -16,6 +16,7 @@
 
 #include <openssl/base.h>
 #include <openssl/ec.h>
+#include <openssl/ec_key.h>
 #include <openssl/ecdh.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>

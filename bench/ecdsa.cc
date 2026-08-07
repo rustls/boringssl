@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <cstring>
-#include <vector>
 
 #include <benchmark/benchmark.h>
 
