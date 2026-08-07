@@ -490,19 +490,6 @@ static const char *kMustNotIncludeDeprecated[] = {
     "SHA1", "RSA",     "SSLv3", "TLSv1", "TLSv1.2",
 };
 
-static const struct {
-  const char *rule;
-  int expected_included_deprecated_count;
-} kDeprecatedCBCSHA256Rules[] = {
-    {"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256", 1},
-    {"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256", 1},
-    {"ALL:TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256", 1},
-    {"ALL:TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256", 1},
-    {"ALL:TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256:TLS_ECDHE_RSA_WITH_AES_128_"
-     "CBC_SHA256",
-     2},
-};
-
 static const CurveTest kCurveTests[] = {
     {
         "P-256",
@@ -636,12 +623,27 @@ TEST(SSLTest, CipherRules) {
     ASSERT_TRUE(SSL_CTX_set_strict_cipher_list(ctx.get(), rule));
     for (const SSL_CIPHER *cipher : SSL_CTX_get_ciphers(ctx.get())) {
       EXPECT_NE(NID_undef, SSL_CIPHER_get_cipher_nid(cipher));
+#if !defined(BORINGSSL_SHARED_LIBRARY)
       EXPECT_FALSE(ssl_cipher_is_deprecated(cipher));
+#endif
     }
   }
 }
 
+#if !defined(BORINGSSL_SHARED_LIBRARY)
 TEST(SSLTest, CipherRulesDeprecated) {
+  static const struct {
+    const char *rule;
+    int expected_included_deprecated_count;
+  } kDeprecatedCBCSHA256Rules[] = {
+      {"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256", 1},
+      {"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256", 1},
+      {"ALL:TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256", 1},
+      {"ALL:TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256", 1},
+      {"ALL:TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256:"
+       "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256",
+       2},
+  };
   for (const auto &test : kDeprecatedCBCSHA256Rules) {
     SCOPED_TRACE(test.rule);
     bssl::UniquePtr<SSL_CTX> ctx(SSL_CTX_new(TLS_method()));
@@ -657,6 +659,7 @@ TEST(SSLTest, CipherRulesDeprecated) {
     EXPECT_EQ(found, test.expected_included_deprecated_count);
   }
 }
+#endif  // BORINGSSL_SHARED_LIBRARY
 
 TEST(SSLTest, CurveRules) {
   for (const CurveTest &t : kCurveTests) {

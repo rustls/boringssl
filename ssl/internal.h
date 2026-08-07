@@ -366,7 +366,7 @@ bool ssl_tls13_cipher_meets_policy(uint16_t cipher_id,
                                    enum ssl_compliance_policy_t policy);
 
 // ssl_cipher_is_deprecated returns true if `cipher` is deprecated.
-OPENSSL_EXPORT bool ssl_cipher_is_deprecated(const SSL_CIPHER *cipher);
+bool ssl_cipher_is_deprecated(const SSL_CIPHER *cipher);
 
 
 // Transcript layer.
