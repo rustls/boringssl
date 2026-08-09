@@ -710,7 +710,7 @@ fn test_mutual_certificate_selectors() -> Result<(), Box<dyn std::error::Error +
     let mut server_ctx_builder = TlsContextBuilder::new_tls();
     let server_cert_store = load_trust_store(Trust::SslClient);
     server_ctx_builder
-        .with_server_side_certificate_callback(Some(server_selector))
+        .with_server_side_certificate_callback(server_selector)
         .with_certificate_store(&server_cert_store)
         .set_ca_names(vec![DistinguishedName::from_bytes(TEST_CA_DN, None)?]);
     let server_ctx = server_ctx_builder.build();
@@ -718,7 +718,7 @@ fn test_mutual_certificate_selectors() -> Result<(), Box<dyn std::error::Error +
     let mut client_ctx_builder = TlsContextBuilder::new_tls();
     let client_cert_store = load_trust_store(Trust::SslServer);
     client_ctx_builder
-        .with_client_side_certificate_callback(Some(client_selector))
+        .with_client_side_certificate_callback(client_selector)
         .with_certificate_store(&client_cert_store)
         .set_ca_names(vec![DistinguishedName::from_bytes(TEST_CA_DN, None)?]);
     let client_ctx = client_ctx_builder.build();
@@ -833,13 +833,13 @@ fn test_mutual_certificate_selectors_connection()
     let mut server_conn_builder = server_ctx.new_server_connection();
     server_conn_builder
         .with_certificate_verification_mode(CertificateVerificationMode::PeerCertMandatory)
-        .with_server_side_certificate_callback(Some(server_selector));
+        .with_server_side_certificate_callback(server_selector);
     let server_conn = server_conn_builder.build();
 
     let mut client_conn_builder = client_ctx.new_client_connection();
     client_conn_builder
         .with_certificate_verification_mode(CertificateVerificationMode::PeerCertMandatory)
-        .with_client_side_certificate_callback(Some(client_selector));
+        .with_client_side_certificate_callback(client_selector);
     let mut client_conn = client_conn_builder.build();
 
     client_conn

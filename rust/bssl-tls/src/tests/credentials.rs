@@ -110,9 +110,9 @@ fn test_private_key_methods() -> Result<(), Box<dyn std::error::Error + Send + S
         let mut builder = TlsCredentialBuilder::new();
         builder
             .with_certificate_chain(&[server_cert, ca])?
-            .with_private_key_delegate(Some(crate::credentials::AsyncPrivateKeyDelegateAdapter(
+            .with_private_key_delegate(crate::credentials::AsyncPrivateKeyDelegateAdapter(
                 private_key_method,
-            )));
+            ));
         builder.build().unwrap()
     };
     server_ctx_builder.with_credential(server_cred)?;

@@ -191,7 +191,7 @@ where
     /// Set certificate selection callback on **server** side.
     pub fn with_server_side_certificate_callback<T: 'static + ServerCertificateSelector<M>>(
         &mut self,
-        cb: Option<T>,
+        cb: T,
     ) -> &mut Self {
         self.as_in_handshake()
             .set_server_side_certificate_callback(cb);
@@ -207,7 +207,7 @@ where
     /// Set certificate selection callback on **client** side.
     pub fn with_client_side_certificate_callback<T: 'static + ClientCertificateSelector<M>>(
         &mut self,
-        cb: Option<T>,
+        cb: T,
     ) -> &mut Self {
         self.as_in_handshake()
             .set_client_side_certificate_callback(cb);
@@ -309,30 +309,18 @@ where
     /// Set certificate selection callback on **server** side.
     pub fn set_server_side_certificate_callback<T: 'static + ServerCertificateSelector<M>>(
         &mut self,
-        cb: Option<T>,
+        cb: T,
     ) -> &mut Self {
         let conn = self.ptr();
         let methods = self.0.get_connection_methods();
-        if let Some(cb) = cb {
-            methods.server_cert_cb = Some(Box::new(cb) as _);
-            methods.server_cert_cb_installed = true;
-            unsafe {
-                // Safety: we only install our own vtable.
-                bssl_sys::SSL_set_cert_cb(
-                    conn,
-                    Some(select_cert_cb::<super::methods::RustConnectionMethods<M>, M>),
-                    core::ptr::null_mut(),
-                );
-            }
-        } else {
-            methods.server_cert_cb = None;
-            methods.server_cert_cb_installed = false;
-            if !methods.client_cert_cb_installed {
-                unsafe {
-                    // Safety: we only uninstall the vtable.
-                    bssl_sys::SSL_set_cert_cb(conn, None, core::ptr::null_mut());
-                }
-            }
+        methods.server_cert_cb = Some(Box::new(cb) as _);
+        unsafe {
+            // Safety: we only install our own vtable.
+            bssl_sys::SSL_set_cert_cb(
+                conn,
+                Some(select_cert_cb::<super::methods::RustConnectionMethods<M>, M>),
+                core::ptr::null_mut(),
+            );
         }
         self
     }
@@ -346,30 +334,18 @@ where
     /// Set certificate selection callback on **client** side.
     pub fn set_client_side_certificate_callback<T: 'static + ClientCertificateSelector<M>>(
         &mut self,
-        cb: Option<T>,
+        cb: T,
     ) -> &mut Self {
         let conn = self.ptr();
         let methods = self.0.get_connection_methods();
-        if let Some(cb) = cb {
-            methods.client_cert_cb = Some(Box::new(cb) as _);
-            methods.client_cert_cb_installed = true;
-            unsafe {
-                // Safety: we only install our own vtable.
-                bssl_sys::SSL_set_cert_cb(
-                    conn,
-                    Some(select_cert_cb::<super::methods::RustConnectionMethods<M>, M>),
-                    core::ptr::null_mut(),
-                );
-            }
-        } else {
-            methods.client_cert_cb = None;
-            methods.client_cert_cb_installed = false;
-            if !methods.server_cert_cb_installed {
-                unsafe {
-                    // Safety: we only uninstall the vtable.
-                    bssl_sys::SSL_set_cert_cb(conn, None, core::ptr::null_mut());
-                }
-            }
+        methods.client_cert_cb = Some(Box::new(cb) as _);
+        unsafe {
+            // Safety: we only install our own vtable.
+            bssl_sys::SSL_set_cert_cb(
+                conn,
+                Some(select_cert_cb::<super::methods::RustConnectionMethods<M>, M>),
+                core::ptr::null_mut(),
+            );
         }
         self
     }

@@ -17,8 +17,8 @@
 use bssl_tls::alpn::H2;
 use bssl_tls::context::TlsContextBuilder;
 use bssl_tls::credentials::{Certificate, TlsCredential, TlsCredentialBuilder};
-use bssl_tls_tokio::hyper::HyperBsslConnector;
 use bssl_tls_tokio::TokioTlsExt;
+use bssl_tls_tokio::hyper::HyperBsslConnector;
 use bssl_x509::{
     certificates::X509Certificate,
     keys::PrivateKey,

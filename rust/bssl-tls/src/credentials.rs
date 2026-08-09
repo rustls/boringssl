@@ -159,22 +159,14 @@ impl TlsCredentialBuilder<X509Mode> {
     /// This will override the `TlsConnection` private key delegate.
     pub fn with_private_key_delegate<T: 'static + PrivateKeyDelegate>(
         &mut self,
-        key_method: Option<T>,
+        key_method: T,
     ) -> &mut Self {
         let cred = self.ptr();
-        if let Some(key_method) = key_method {
-            unsafe {
-                // Safety: we only install our own vtable.
-                bssl_sys::SSL_CREDENTIAL_set_private_key_method(cred, methods::PRIVATE_KEY_METHODS);
-            }
-            self.get_credential_methods().private_key_methods = Some(Box::new(key_method) as _);
-        } else {
-            unsafe {
-                // Safety: we only uninstall the vtable.
-                bssl_sys::SSL_CREDENTIAL_set_private_key_method(cred, core::ptr::null());
-            }
-            self.get_credential_methods().private_key_methods.take();
+        unsafe {
+            // Safety: we only install our own vtable.
+            bssl_sys::SSL_CREDENTIAL_set_private_key_method(cred, methods::PRIVATE_KEY_METHODS);
         }
+        self.get_credential_methods().private_key_methods = Some(Box::new(key_method) as _);
         self
     }
 

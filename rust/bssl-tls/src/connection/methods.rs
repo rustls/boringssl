@@ -75,8 +75,6 @@ pub(super) struct RustConnectionMethods<Mode> {
     pub handshake_complete: Option<Box<dyn super::lifecycle::HandshakeComplete>>,
     pub server_cert_cb: Option<Box<dyn ServerCertificateSelector<Mode>>>,
     pub client_cert_cb: Option<Box<dyn ClientCertificateSelector<Mode>>>,
-    pub server_cert_cb_installed: bool,
-    pub client_cert_cb_installed: bool,
     /// A mailbox to propagate IO retrying reasons.
     pub pending_reason: Option<TlsRetryReason>,
 }
@@ -90,8 +88,6 @@ impl<M> RustConnectionMethods<M> {
             handshake_complete: None,
             server_cert_cb: None,
             client_cert_cb: None,
-            server_cert_cb_installed: false,
-            client_cert_cb_installed: false,
             pending_reason: None,
         }
     }

@@ -253,26 +253,18 @@ impl<M: SupportedMode> TlsContextBuilder<M> {
     /// Set certificate selection callback on **client** side.
     pub fn with_client_side_certificate_callback<T: 'static + ClientCertificateSelector<M>>(
         &mut self,
-        cb: Option<T>,
+        cb: T,
     ) -> &mut Self {
         let ctx = self.ptr();
         let methods = self.get_context_methods();
-        if let Some(cb) = cb {
-            methods.client_cert_cb = Some(Box::new(cb) as _);
-            unsafe {
-                // Safety: we only install our own vtable.
-                bssl_sys::SSL_CTX_set_cert_cb(
-                    ctx,
-                    Some(select_cert_cb::<RustContextMethods<M>, M>),
-                    null_mut(),
-                );
-            }
-        } else {
-            methods.client_cert_cb = None;
-            unsafe {
-                // Safety: we only uninstall the vtable.
-                bssl_sys::SSL_CTX_set_cert_cb(ctx, None, null_mut());
-            }
+        methods.client_cert_cb = Some(Box::new(cb) as _);
+        unsafe {
+            // Safety: we only install our own vtable.
+            bssl_sys::SSL_CTX_set_cert_cb(
+                ctx,
+                Some(select_cert_cb::<RustContextMethods<M>, M>),
+                null_mut(),
+            );
         }
         self
     }
@@ -280,26 +272,18 @@ impl<M: SupportedMode> TlsContextBuilder<M> {
     /// Set certificate selection callback on **server** side.
     pub fn with_server_side_certificate_callback<T: 'static + ServerCertificateSelector<M>>(
         &mut self,
-        cb: Option<T>,
+        cb: T,
     ) -> &mut Self {
         let ctx = self.ptr();
         let methods = self.get_context_methods();
-        if let Some(cb) = cb {
-            methods.server_cert_cb = Some(Box::new(cb) as _);
-            unsafe {
-                // Safety: we only install our own vtable.
-                bssl_sys::SSL_CTX_set_cert_cb(
-                    ctx,
-                    Some(select_cert_cb::<RustContextMethods<M>, M>),
-                    null_mut(),
-                );
-            }
-        } else {
-            methods.server_cert_cb = None;
-            unsafe {
-                // Safety: we only uninstall the vtable.
-                bssl_sys::SSL_CTX_set_cert_cb(ctx, None, null_mut());
-            }
+        methods.server_cert_cb = Some(Box::new(cb) as _);
+        unsafe {
+            // Safety: we only install our own vtable.
+            bssl_sys::SSL_CTX_set_cert_cb(
+                ctx,
+                Some(select_cert_cb::<RustContextMethods<M>, M>),
+                null_mut(),
+            );
         }
         self
     }

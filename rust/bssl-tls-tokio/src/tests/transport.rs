@@ -35,7 +35,9 @@ fn dumb_server_client() -> (TlsConnection<Server>, TlsConnection<Client>) {
     use bssl_tls::context::TlsContextBuilder;
 
     let mut server_builder = TlsContextBuilder::new_tls();
-    server_builder.with_credential(super::server_credential()).unwrap();
+    server_builder
+        .with_credential(super::server_credential())
+        .unwrap();
     let server_conn = server_builder.build().new_server_connection().build();
 
     let mut client_builder = TlsContextBuilder::new_tls();
