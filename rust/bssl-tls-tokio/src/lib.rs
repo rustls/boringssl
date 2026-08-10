@@ -119,6 +119,7 @@ use std::{
         DerefMut, //
     },
     pin::Pin,
+    str::FromStr,
     task::{
         Context,
         Poll,
@@ -164,7 +165,7 @@ use bssl_tls::{
 mod tests;
 
 /// Translates a `std::io::Error` into an `AbstractSocketResult`.
-fn translate_stdio_err(err: io::Error) -> AbstractSocketResult {
+pub(crate) fn translate_stdio_err(err: io::Error) -> AbstractSocketResult {
     match err.kind() {
         io::ErrorKind::WouldBlock => AbstractSocketResult::Retry,
         io::ErrorKind::ConnectionReset
@@ -407,7 +408,7 @@ gen_impl_datagram!(tokio::net::UnixDatagram);
 
 /// A wrapper around [`TlsConnection`] that implements Tokio's async I/O traits.
 pub struct TokioTlsConnection<Role> {
-    inner: TlsConnection<Role, TlsMode>,
+    pub(crate) inner: TlsConnection<Role, TlsMode>,
 }
 
 impl<Role> TokioTlsConnection<Role> {
@@ -449,7 +450,7 @@ impl<R> AsyncRead for TokioTlsConnection<R> {
         let status = match self.inner.as_pin_mut().async_poll_read(&mut recv_buf, cx) {
             Ok(Some(status)) => status,
             Ok(None) => return Poll::Pending,
-            Err(e) => return Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, e))),
+            Err(e) => return Poll::Ready(Err(io::Error::other(e))),
         };
         match status {
             IoStatus::Ok(bytes) => {
@@ -461,10 +462,7 @@ impl<R> AsyncRead for TokioTlsConnection<R> {
                 Poll::Ready(Ok(()))
             }
             IoStatus::EndOfStream => Poll::Ready(Ok(())),
-            _ => Poll::Ready(Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Unexpected I/O status",
-            ))),
+            _ => Poll::Ready(Err(io::Error::other("Unexpected I/O status"))),
         }
     }
 }
@@ -478,15 +476,12 @@ impl<R> AsyncWrite for TokioTlsConnection<R> {
         let status = match self.inner.as_pin_mut().async_poll_write(buf, cx) {
             Ok(Some(status)) => status,
             Ok(None) => return Poll::Pending,
-            Err(e) => return Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, e))),
+            Err(e) => return Poll::Ready(Err(io::Error::other(e))),
         };
         match status {
             IoStatus::Ok(bytes) => Poll::Ready(Ok(bytes)),
             IoStatus::EndOfStream => Poll::Ready(Ok(0)),
-            _ => Poll::Ready(Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Unexpected I/O status",
-            ))),
+            _ => Poll::Ready(Err(io::Error::other("Unexpected I/O status"))),
         }
     }
 
@@ -494,25 +489,23 @@ impl<R> AsyncWrite for TokioTlsConnection<R> {
         let status = match self.inner.as_pin_mut().async_poll_flush(cx) {
             Ok(Some(status)) => status,
             Ok(None) => return Poll::Pending,
-            Err(e) => return Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, e))),
+            Err(e) => return Poll::Ready(Err(io::Error::other(e))),
         };
         match status {
             IoStatus::Ok(_) => Poll::Ready(Ok(())),
             IoStatus::EndOfStream => Poll::Ready(Ok(())),
-            _ => Poll::Ready(Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Unexpected I/O status",
-            ))),
+            _ => Poll::Ready(Err(io::Error::other("Unexpected I/O status"))),
         }
     }
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         match self.inner.as_pin_mut().async_poll_shutdown(cx) {
             Ok(Some(ShutdownStatus::CloseNotifyReceived)) => Poll::Ready(Ok(())),
-            Ok(Some(ShutdownStatus::RemainingApplicationData)) => Poll::Ready(Err(io::Error::new(
-                io::ErrorKind::Other,
-                "caller needs to drain application data before polling on shutdown again",
-            ))),
+            Ok(Some(ShutdownStatus::RemainingApplicationData)) => {
+                Poll::Ready(Err(io::Error::other(
+                    "caller needs to drain application data before polling on shutdown again",
+                )))
+            }
             Ok(Some(ShutdownStatus::EndOfStream)) => Poll::Ready(Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
                 "unexpected eof while waiting for peek close_notify",
@@ -521,7 +514,7 @@ impl<R> AsyncWrite for TokioTlsConnection<R> {
                 unreachable!()
             }
             Ok(None) => Poll::Pending,
-            Err(e) => Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, e))),
+            Err(e) => Poll::Ready(Err(io::Error::other(e))),
         }
     }
 }
@@ -543,16 +536,15 @@ impl TlsConnector {
         S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
     {
         let mut conn = self.ctx.new_client_connection().build();
-        conn.in_handshake().unwrap().set_host(domain)?;
-
+        let mut in_handshake = conn.in_handshake().expect("we are handshaking");
+        in_handshake.set_host(domain)?;
+        if std::net::IpAddr::from_str(domain).is_err() {
+            in_handshake.set_tlsext_host_name(domain)?;
+        }
         conn.set_io(TokioIo(stream))?;
-
         conn.async_handshake().await?;
 
-        Ok(TlsStream {
-            conn: TokioTlsConnection::new(conn),
-            _marker: PhantomData,
-        })
+        Ok(TlsStream::new(TokioTlsConnection::new(conn)))
     }
 }
 
@@ -573,25 +565,27 @@ impl TlsAcceptor {
         S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
     {
         let mut conn = self.ctx.new_server_connection().build();
-
         conn.set_io(TokioIo(stream))?;
-
         conn.async_handshake().await?;
 
-        Ok(TlsStream {
-            conn: TokioTlsConnection::new(conn),
-            _marker: PhantomData,
-        })
+        Ok(TlsStream::new(TokioTlsConnection::new(conn)))
     }
 }
 
 /// A TLS stream driven by Tokio I/O.
 pub struct TlsStream<Role, Stream> {
-    conn: TokioTlsConnection<Role>,
-    _marker: PhantomData<Stream>,
+    pub(crate) conn: TokioTlsConnection<Role>,
+    pub(crate) _marker: PhantomData<Stream>,
 }
 
 impl<Role, S> TlsStream<Role, S> {
+    pub(crate) fn new(conn: TokioTlsConnection<Role>) -> Self {
+        Self {
+            conn,
+            _marker: PhantomData,
+        }
+    }
+
     /// Get a reference to the underlying `TlsConnection`.
     pub fn get_ref(&self) -> &TlsConnection<Role> {
         &self.conn

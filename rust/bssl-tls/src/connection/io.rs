@@ -26,11 +26,10 @@ use core::{
 };
 
 use crate::{
-    ReceiveBuffer,
     connection::{
-        TlsConnection,
         lifecycle::ShutdownStatus,
         methods::HasTlsConnectionMethod, //
+        TlsConnection,
     },
     context::{
         HasDatagramIo,
@@ -44,6 +43,7 @@ use crate::{
     },
     ffi::slice_into_ffi_raw_parts,
     io::IoStatus, //
+    ReceiveBuffer,
 };
 
 impl<R, M> TlsConnection<R, M>
