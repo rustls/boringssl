@@ -41,7 +41,7 @@ const size_t kLegacyADLen = kTLSADLen - 2;
 void BM_SpeedAEAD(benchmark::State &state, size_t ad_len,
                   evp_aead_direction_t direction, const EVP_AEAD *aead) {
   const unsigned kAlignment = 16;
-  size_t input_len = static_cast<size_t>(state.range(0));
+  const size_t input_len = static_cast<size_t>(state.range(0));
   ScopedEVP_AEAD_CTX ctx;
   const size_t key_len = EVP_AEAD_key_length(aead);
   const size_t nonce_len = EVP_AEAD_nonce_length(aead);
@@ -58,13 +58,13 @@ void BM_SpeedAEAD(benchmark::State &state, size_t ad_len,
   std::vector<uint8_t> ad(ad_len);
   std::vector<uint8_t> tag_storage(overhead_len + kAlignment);
 
-  uint8_t *const in =
+  uint8_t *in =
       static_cast<uint8_t *>(align_pointer(in_storage.data(), kAlignment));
-  uint8_t *const out =
+  uint8_t *out =
       static_cast<uint8_t *>(align_pointer(out_storage.data(), kAlignment));
-  uint8_t *const tag =
+  uint8_t *tag =
       static_cast<uint8_t *>(align_pointer(tag_storage.data(), kAlignment));
-  uint8_t *const in2 =
+  uint8_t *in2 =
       static_cast<uint8_t *>(align_pointer(in2_storage.data(), kAlignment));
 
   if (!EVP_AEAD_CTX_init_with_direction(ctx.get(), aead, key.data(), key_len,
@@ -77,12 +77,20 @@ void BM_SpeedAEAD(benchmark::State &state, size_t ad_len,
   if (direction == evp_aead_seal) {
     size_t tag_len;
     for (auto _ : state) {
+      benchmark::DoNotOptimize(nonce.data());
+      benchmark::DoNotOptimize(in);
+      benchmark::DoNotOptimize(ad.data());
+      benchmark::DoNotOptimize(ad_len);
       if (!EVP_AEAD_CTX_seal_scatter(
               ctx.get(), out, tag, &tag_len, overhead_len, nonce.data(),
               nonce_len, in, input_len, nullptr, 0, ad.data(), ad_len)) {
         state.SkipWithError("EVP_AEAD_CTX_seal failed.");
         return;
       }
+      benchmark::DoNotOptimize(out);
+      benchmark::DoNotOptimize(tag);
+      benchmark::DoNotOptimize(tag_len);
+      benchmark::ClobberMemory();
     }
     state.SetBytesProcessed(state.iterations() * input_len);
   } else {
@@ -104,6 +112,11 @@ void BM_SpeedAEAD(benchmark::State &state, size_t ad_len,
 
     size_t in2_len;
     for (auto _ : state) {
+      benchmark::DoNotOptimize(nonce.data());
+      benchmark::DoNotOptimize(out);
+      benchmark::DoNotOptimize(out_len);
+      benchmark::DoNotOptimize(ad.data());
+      benchmark::DoNotOptimize(ad_len);
       // N.B. EVP_AEAD_CTX_open_gather is not implemented for all AEADs.
       if (!EVP_AEAD_CTX_open(ctx.get(), in2, &in2_len, input_len + overhead_len,
                              nonce.data(), nonce_len, out, out_len, ad.data(),
@@ -111,6 +124,9 @@ void BM_SpeedAEAD(benchmark::State &state, size_t ad_len,
         state.SkipWithError("EVP_AEAD_CTX_open failed.");
         return;
       }
+      benchmark::DoNotOptimize(in2);
+      benchmark::DoNotOptimize(in2_len);
+      benchmark::ClobberMemory();
     }
     state.SetBytesProcessed(state.iterations() * input_len);
   }
