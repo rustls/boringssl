@@ -853,6 +853,8 @@ if(BUILD_TESTING)
                   run ${CMAKE_CURRENT_SOURCE_DIR}/util/audit_symbols.go
                   -ignore-symbols-with ${BORINGSSL_PREFIX}
                   $<TARGET_FILE:crypto>
+                  $<TARGET_FILE:decrepit>
+                  $<TARGET_FILE:pki>
           USES_TERMINAL
         )
         add_dependencies(run_tests check_prefixed_symbols)
