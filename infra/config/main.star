@@ -1390,6 +1390,7 @@ both_builders(
     MAC_ARM64_HOST,
     properties = compile_only({
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_STATIC,
     }),
 )
