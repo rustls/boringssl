@@ -132,12 +132,52 @@ func printAndExit(format string, args ...any) {
 	os.Exit(1)
 }
 
+func guessArchiveFiles() []string {
+	var paths []string
+	for _, name := range []string{
+		// List of libraries for which symbol prefixing is stable.
+		"crypto",
+	} {
+		found := ""
+		// Trying patterns for all platforms as the current build might be a cross compile.
+		for _, pattern := range []string{
+			"lib%s.a",     // Linux and macOS static.
+			"lib%s.so",    // Linux shared.
+			"%s.lib",      // Windows static.
+			"%s.dll",      // Windows shared.
+			"lib%s.dylib", // macOS shared.
+		} {
+			path := fmt.Sprintf(pattern, name)
+			if _, err := os.Stat(path); err == nil {
+				if found != "" {
+					fmt.Fprintf(os.Stderr, "Multiple library files for lib%s found in the current directory: %s and %s - please specify explicitly, or do a clean build first.\n", name, found, path)
+					return nil // Will show usage.
+				}
+				found = path
+			}
+		}
+		if found == "" {
+			// Fail if _any_ of the libraries that should be there isn't there.
+			// This guards against an accidentally successful result from an incomplete build.
+			fmt.Fprintf(os.Stderr, "No library file for lib%s found in the current directory - please specify explicitly, or chdir to where it is first.\n", name)
+			return nil // Will show usage.
+		}
+		paths = append(paths, found)
+	}
+	return paths
+}
+
 func main() {
 	flag.Parse()
-	if flag.NArg() < 1 {
+	archiveFiles := flag.Args()
+
+	if len(archiveFiles) == 0 {
+		archiveFiles = guessArchiveFiles()
+	}
+
+	if len(archiveFiles) == 0 {
 		printAndExit("Usage: %s [-out OUT] [-obj-file-format FORMAT] ARCHIVE_FILE [ARCHIVE_FILE [...]]", os.Args[0])
 	}
-	archiveFiles := flag.Args()
 
 	out := os.Stdout
 	if *outFlag != "-" {
@@ -164,6 +204,8 @@ func main() {
 	}
 
 	for _, archive := range archiveFiles {
+		fmt.Fprintf(os.Stderr, "Checking %s...\n", archive)
+
 		f, err := os.Open(archive)
 		if err != nil {
 			printAndExit("Error opening %s: %s", archive, err)
