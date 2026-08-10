@@ -1481,6 +1481,7 @@ both_builders(
             "BUILD_SHARED_LIBS": "1",
         },
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_SHARED,
     },
 )
@@ -1626,6 +1627,7 @@ both_builders(
             "BUILD_SHARED_LIBS": "1",
         },
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_SHARED,
     },
 )
