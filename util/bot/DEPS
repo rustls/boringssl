@@ -70,12 +70,12 @@ vars = {
 
   # Update to the latest revision of
   # https://chromium.googlesource.com/chromium/src/tools/clang
-  'tools_clang_revision': '956f5b673f981d317e4c5d2d01a43a7f56259557',
+  'tools_clang_revision': 'e4816757c45a072f08279139108a0a937bbeb239',
 
   # Update to the latest revision of
   # https://chromium.googlesource.com/chromium/src/tools/rust
   # and also ensure that `tools_clang_revision` above is up-to-date.
-  'tools_rust_revision': '69bb79a132d32d67b6f6820226b02e50f1945202',
+  'tools_rust_revision': '285104ac97c055afdc632b9c02af223ef738ad87',
 }
 
 deps = {
