@@ -844,6 +844,7 @@ both_builders(
             "ANDROID_PLATFORM": "android-24",
         },
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
@@ -874,6 +875,7 @@ both_builders(
             "ANDROID_PLATFORM": "android-24",
         },
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
@@ -901,6 +903,7 @@ both_builders(
             "ANDROID_PLATFORM": "android-24",
         },
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
@@ -979,6 +982,7 @@ both_builders(
             "RUST_BINDINGS": "x86_64-unknown-linux-gnu",
         },
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         # Also build and test the Rust code.
         "rust": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
@@ -1067,6 +1071,7 @@ both_builders(
             "CMAKE_C_FLAGS": "-m32 -msse2",
         },
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
@@ -1308,6 +1313,7 @@ both_builders(
             "OPENSSL_NO_SSE2_FOR_TESTING": "1",
         },
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
