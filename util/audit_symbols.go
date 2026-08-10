@@ -190,16 +190,22 @@ func main() {
 	}
 
 	// Only add first instance of any symbol; keep track of them in this map.
-	symbols := make(map[string]strength)
+	symbols := make(map[string]symbolInfo)
 	collectSymbols := func(name, archive string, contents []byte) {
 		syms, err := listSymbols(contents)
 		if err != nil {
 			printAndExit("Error listing symbols from %q in %q: %s", name, archive, err)
 		}
 		for s, strength := range syms {
-			if _, ok := symbols[s]; !ok {
-				symbols[s] = strength
+			info, found := symbols[s]
+			if !found || strength > info.strength {
+				info.strength = strength
 			}
+			if info.origins == nil {
+				info.origins = map[string]struct{}{}
+			}
+			info.origins[archive] = struct{}{}
+			symbols[s] = info
 		}
 	}
 
@@ -238,7 +244,7 @@ SYMBOLS:
 		if *ignoreSymbolsWith != "" && strings.Contains(s, *ignoreSymbolsWith) {
 			continue
 		}
-		if symbols[s] == weakSymbol {
+		if symbols[s].strength == weakSymbol {
 			for _, symRE := range skipWeakSymbols {
 				if symRE.MatchString(s) {
 					continue SYMBOLS
@@ -252,7 +258,7 @@ SYMBOLS:
 		}
 		msg := s
 		if *ignoreSymbolsWith != "" {
-			msg = fmt.Sprintf("Found %s symbol without %q: %s", symbols[s], *ignoreSymbolsWith, s)
+			msg = fmt.Sprintf("Found %s symbol without %q in %v: %s", symbols[s].strength, *ignoreSymbolsWith, slices.Sorted(maps.Keys(symbols[s].origins)), s)
 		}
 		if _, err := fmt.Fprintln(out, msg); err != nil {
 			printAndExit("Error writing to %s: %s", *outFlag, err)
@@ -288,6 +294,11 @@ func weakIf(weak bool) strength {
 		return weakSymbol
 	}
 	return strongSymbol
+}
+
+type symbolInfo struct {
+	strength strength
+	origins  map[string]struct{}
 }
 
 // listSymbols lists the exported symbols from an object file.
