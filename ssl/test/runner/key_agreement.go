@@ -514,7 +514,7 @@ func kemForCurveID(id CurveID, config *Config) (kemImplementation, bool) {
 	case CurveX25519:
 		kem = &ecdhKEM{curve: ecdh.X25519()}
 	case CurveX25519MLKEM768:
-		// draft-ietf-tls-ecdhe-mlkem-00
+		// RFC 10024
 		kem = &concatKEM{kem1: &mlkem768KEM{}, kem2: &ecdhKEM{curve: ecdh.X25519()}}
 	case CurveMLKEM1024:
 		// draft-ietf-tls-mlkem-04

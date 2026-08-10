@@ -192,7 +192,7 @@ class X25519KeyShare : public SSLKeyShare {
   uint8_t private_key_[32];
 };
 
-// draft-ietf-tls-ecdhe-mlkem-00
+// RFC 10024
 class X25519MLKEM768KeyShare : public SSLKeyShare {
  public:
   X25519MLKEM768KeyShare() {}
