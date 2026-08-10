@@ -1455,6 +1455,7 @@ both_builders(
     properties = compile_only({
         "msvc_target": "x86",
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     }),
 )
@@ -1535,6 +1536,7 @@ both_builders(
             "CMAKE_CXX_FLAGS": "-m32 -msse2",
         },
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     }),
 )
@@ -1598,6 +1600,7 @@ both_builders(
     properties = compile_only({
         "msvc_target": "x64",
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     }),
 )
@@ -1660,6 +1663,7 @@ both_builders(
         "clang": True,
         "msvc_target": "x64",
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     }),
 )
@@ -1704,6 +1708,7 @@ both_builders(
         },
         "msvc_target": "arm64",
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     }),
 )
@@ -1744,6 +1749,7 @@ both_builders(
         },
         "msvc_target": "arm64",
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_WIN_STATIC,
     }),
 )
