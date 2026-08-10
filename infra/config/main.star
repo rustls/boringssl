@@ -777,6 +777,7 @@ both_builders(
             "ANDROID_PLATFORM": "android-24",
         },
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
@@ -938,6 +939,7 @@ both_builders(
             "CMAKE_OSX_SYSROOT": "iphoneos",
         },
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_STATIC,
     }),
 )
@@ -1235,6 +1237,7 @@ both_builders(
     properties = compile_only({
         "clang": True,
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
@@ -1358,6 +1361,7 @@ both_builders(
     cq_enabled = False,
     properties = compile_only({
         "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
         "upload_to_cas": FINISHED_OUTPUT_FILES_MAC_STATIC,
     }),
 )
