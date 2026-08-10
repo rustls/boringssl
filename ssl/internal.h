@@ -3097,7 +3097,7 @@ class DTLSMessageBitmap {
   size_t first_unmarked_byte_ = 0;
 };
 
-struct hm_header_st {
+struct DTLSHandshakeHeader {
   uint8_t type;
   uint32_t msg_len;
   uint16_t seq;
@@ -3107,24 +3107,59 @@ struct hm_header_st {
 
 // An DTLSIncomingMessage is an incoming DTLS message, possibly not yet
 // assembled.
-struct DTLSIncomingMessage {
+class DTLSIncomingMessage {
+ public:
   static constexpr bool kAllowUniquePtr = true;
 
-  Span<uint8_t> msg() { return Span(data).subspan(DTLS1_HM_HEADER_LENGTH); }
-  Span<const uint8_t> msg() const {
-    return Span(data).subspan(DTLS1_HM_HEADER_LENGTH);
-  }
-  size_t msg_len() const { return msg().size(); }
+  explicit DTLSIncomingMessage(const DTLSHandshakeHeader &hdr);
 
-  // type is the type of the message.
-  uint8_t type = 0;
-  // seq is the sequence number of this message.
-  uint16_t seq = 0;
-  // data contains the message, including the message header of length
-  // `DTLS1_HM_HEADER_LENGTH`.
-  Array<uint8_t> data;
-  // reassembly tracks which parts of the message have been received.
-  DTLSMessageBitmap reassembly;
+  uint8_t type() const { return type_; }
+  uint16_t seq() const { return seq_; }
+  size_t msg_len() const {
+    return std::holds_alternative<FragmentList>(msg_)
+               ? std::get<FragmentList>(msg_).msg_len
+               : std::get<ReassemblyBuffer>(msg_).msg.size() -
+                     DTLS1_HM_HEADER_LENGTH;
+  }
+
+  // AddFragment adds the fragment to the incoming message. It returns true on
+  // success and false on error. The caller must have checked that `offset` and
+  // `data` fit in the message body.
+  bool AddFragment(uint32_t offset, Span<const uint8_t> data);
+
+  // IsComplete returns whether the incoming message is complete.
+  bool IsComplete() const;
+
+  // GetMessage returns the message as an SSLMessage if complete, and
+  // std::nullopt otherwise.
+  std::optional<SSLMessage> GetMessage() const;
+
+ private:
+  struct FragmentList {
+    // fragments contains fragment data in order of 24-bit offset, 24-bit
+    // length, data.
+    Vector<uint8_t> fragments;
+    // msg_len contains the length of the handshake message.
+    uint32_t msg_len;
+  };
+
+  struct ReassemblyBuffer {
+    void AddFragment(uint32_t offset, Span<const uint8_t> data);
+
+    // msg holds the message data, including `DTLS1_HM_HEADER_LENGTH` bytes
+    // of reconstructed header.
+    Array<uint8_t> msg;
+    // reassembly tracks which parts of the message have been received.
+    DTLSMessageBitmap reassembly;
+  };
+
+  uint8_t type_;
+  uint16_t seq_;
+  // msg_ holds the message data. Before enough data has been received for the
+  // message to be complete, it stores a FragmentList, which is proportional to
+  // total data received. Once the message might be complete, it switches to
+  // ReassemblyBuffer, which is proportional to the final amount.
+  std::variant<FragmentList, ReassemblyBuffer> msg_;
 };
 
 struct DTLSOutgoingMessage {
@@ -3750,7 +3785,7 @@ int dtls1_write_app_data(SSLImpl *ssl, bool *out_needs_handshake,
 int dtls1_write_record(SSLImpl *ssl, int type, Span<const uint8_t> in,
                        uint16_t epoch);
 
-bool dtls1_parse_fragment(CBS *cbs, struct hm_header_st *out_hdr,
+bool dtls1_parse_fragment(CBS *cbs, DTLSHandshakeHeader *out_hdr,
                           CBS *out_body);
 
 // DTLS1_MTU_TIMEOUTS is the maximum number of retransmit timeouts to expire
