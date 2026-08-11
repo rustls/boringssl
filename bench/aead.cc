@@ -263,8 +263,12 @@ void SetInputLength(benchmark::Benchmark *bench) {
 
 void SetInputLengthv(benchmark::Benchmark *bench) {
   // No need to distinguish by name - the IOVec related args suffice to
-  // distinguish them.
-  bench->Name("BM_SpeedAEAD");
+  // distinguish them. This allows later making BM_SpeedAEADv the only one,
+  // while renaming it to BM_SpeedAEAD.
+  const std::string prefix = "BM_SpeedAEADv/";
+  BSSL_CHECK(std::string(bench->GetName()).substr(0, prefix.size()) == prefix);
+  bench->Name(std::string("BM_SpeedAEAD/") +
+              std::string(bench->GetName()).substr(prefix.size()));
 
   bench->ArgNames({"InputSize", "IOVecFirst", "IOVecOthers"});
   auto input_sizes = bench::GetInputSizes(bench);
