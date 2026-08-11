@@ -2847,13 +2847,12 @@ OPENSSL_EXPORT int X509_STORE_add_crl(X509_STORE *store, X509_CRL *crl);
 // explicitly unset after creating the `X509_STORE_CTX`.
 //
 // As of writing these late defaults are a depth limit (see
-// `X509_VERIFY_PARAM_set_depth`) and the `X509_V_FLAG_TRUSTED_FIRST` flag. This
-// warning does not apply if the parameters were set in `store`.
+// `X509_VERIFY_PARAM_set_depth`). This warning does not apply if the parameters
+// were set in `store`.
 //
 // TODO(crbug.com/boringssl/441): This behavior is very surprising. Can we
 // remove this notion of late defaults? The unsettable value at `X509_STORE` is
 // -1, which rejects everything but explicitly-trusted self-signed certificates.
-// `X509_V_FLAG_TRUSTED_FIRST` is mostly a workaround for poor path-building.
 OPENSSL_EXPORT X509_VERIFY_PARAM *X509_STORE_get0_param(X509_STORE *store);
 
 // X509_STORE_set1_param copies verification parameters from `param` as in
@@ -3276,16 +3275,14 @@ OPENSSL_EXPORT int X509_VERIFY_PARAM_set1(X509_VERIFY_PARAM *to,
 // X509_V_FLAG_CHECK_SS_SIGNATURE checks the redundant signature on self-signed
 // trust anchors. This check provides no security benefit and only wastes CPU.
 #define X509_V_FLAG_CHECK_SS_SIGNATURE 0x4000
-// X509_V_FLAG_TRUSTED_FIRST, during path-building, checks for a match in the
-// trust store before considering an untrusted intermediate. This flag is
-// enabled by default.
-#define X509_V_FLAG_TRUSTED_FIRST 0x8000
+// X509_V_FLAG_TRUSTED_FIRST does nothing. The behavior it controls is always
+// enabled.
+#define X509_V_FLAG_TRUSTED_FIRST 0x0
 // X509_V_FLAG_PARTIAL_CHAIN treats all trusted certificates as trust anchors,
 // independent of the `X509_VERIFY_PARAM_set_trust` setting.
 #define X509_V_FLAG_PARTIAL_CHAIN 0x80000
-// X509_V_FLAG_NO_ALT_CHAINS disables building alternative chains if the initial
-// one was rejected.
-#define X509_V_FLAG_NO_ALT_CHAINS 0x100000
+// X509_V_FLAG_NO_ALT_CHAINS does nothing.
+#define X509_V_FLAG_NO_ALT_CHAINS 0x0
 // X509_V_FLAG_NO_CHECK_TIME disables all time checks in certificate
 // verification.
 #define X509_V_FLAG_NO_CHECK_TIME 0x200000

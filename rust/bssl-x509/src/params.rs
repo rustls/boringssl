@@ -98,8 +98,6 @@ bitflags::bitflags! {
         /// Treat all trusted certificates as trust anchors regardless of the
         /// [`CertificateVerificationParams::set_trust`] setting.
         const PARTIAL_CHAIN = bssl_sys::X509_V_FLAG_PARTIAL_CHAIN as c_ulong;
-        /// Disable building of alternative chains, when the first built chain was rejected.
-        const NO_ALT_CHAINS = bssl_sys::X509_V_FLAG_NO_ALT_CHAINS as c_ulong;
         /// Disable all time checks during certificate verification.
         const NO_CHECK_TIME = bssl_sys::X509_V_FLAG_NO_CHECK_TIME as c_ulong;
     }

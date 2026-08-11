@@ -138,7 +138,7 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
   int bad_chain = 0;
   X509_VERIFY_PARAM *param = ctx->param;
   int i, ok = 0;
-  int j, retry, trust;
+  int trust;
   STACK_OF(X509) *sktmp = nullptr;
 
   {
@@ -206,19 +206,17 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
       if (is_self_signed) {
         break;
       }
-      // If asked see if we can find issuer in trusted store first
-      if (ctx->param->flags & X509_V_FLAG_TRUSTED_FIRST) {
-        X509 *issuer = get_trusted_issuer(ctx, x);
-        if (issuer != nullptr) {
-          // Free the certificate. It will be picked up again later.
-          X509_free(issuer);
-          break;
-        }
+      // See if we can find issuer in trusted store first
+      X509 *issuer = get_trusted_issuer(ctx, x);
+      if (issuer != nullptr) {
+        // Free the certificate. It will be picked up again later.
+        X509_free(issuer);
+        break;
       }
 
       // If we were passed a cert chain, use it first
       if (sktmp != nullptr) {
-        X509 *issuer = find_issuer(ctx, sktmp, x);
+        issuer = find_issuer(ctx, sktmp, x);
         if (issuer != nullptr) {
           if (!sk_X509_push(ctx->chain, issuer)) {
             ctx->error = X509_V_ERR_OUT_OF_MEM;
@@ -236,121 +234,88 @@ int X509_verify_cert(X509_STORE_CTX *ctx) {
       break;
     }
 
-    // Remember how many untrusted certs we have
-    j = num;
-    // at this point, chain should contain a list of untrusted certificates.
+    // At this point, chain should contain a list of untrusted certificates.
     // We now need to add at least one trusted one, if possible, otherwise we
     // complain.
 
-    do {
-      // Examine last certificate in chain and see if it is self signed.
-      i = (int)sk_X509_num(ctx->chain);
-      x = sk_X509_value(ctx->chain, i - 1);
+    // Examine last certificate in chain and see if it is self signed.
+    i = (int)sk_X509_num(ctx->chain);
+    x = sk_X509_value(ctx->chain, i - 1);
 
-      int is_self_signed;
+    int is_self_signed;
+    if (!cert_self_signed(x, &is_self_signed)) {
+      ctx->error = X509_V_ERR_INVALID_EXTENSION;
+      goto end;
+    }
+
+    if (is_self_signed) {
+      // we have a self signed certificate
+      if (sk_X509_num(ctx->chain) == 1) {
+        // We have a single self signed certificate: see if we can
+        // find it in the store. We must have an exact match to avoid
+        // possible impersonation.
+        X509 *issuer = get_trusted_issuer(ctx, x);
+        if (issuer == nullptr || X509_cmp(x, issuer) != 0) {
+          X509_free(issuer);
+          ctx->error = X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT;
+          ctx->current_cert = x;
+          ctx->error_depth = i - 1;
+          bad_chain = 1;
+          if (!call_verify_cb(0, ctx)) {
+            goto end;
+          }
+        } else {
+          // We have a match: replace certificate with store
+          // version so we get any trust settings.
+          X509_free(x);
+          x = issuer;
+          (void)sk_X509_set(ctx->chain, i - 1, x);
+          ctx->last_untrusted = 0;
+        }
+      } else {
+        // extract and save self signed certificate for later use
+        chain_ss = sk_X509_pop(ctx->chain);
+        ctx->last_untrusted--;
+        num--;
+        x = sk_X509_value(ctx->chain, num - 1);
+      }
+    }
+    // We now lookup certs from the certificate store
+    for (;;) {
+      if (num >= max_chain) {
+        // FIXME: If this happens, we should take note of it and, if
+        // appropriate, use the X509_V_ERR_CERT_CHAIN_TOO_LONG error code
+        // later.
+        break;
+      }
       if (!cert_self_signed(x, &is_self_signed)) {
         ctx->error = X509_V_ERR_INVALID_EXTENSION;
         goto end;
       }
-
+      // If we are self signed, we break
       if (is_self_signed) {
-        // we have a self signed certificate
-        if (sk_X509_num(ctx->chain) == 1) {
-          // We have a single self signed certificate: see if we can
-          // find it in the store. We must have an exact match to avoid
-          // possible impersonation.
-          X509 *issuer = get_trusted_issuer(ctx, x);
-          if (issuer == nullptr || X509_cmp(x, issuer) != 0) {
-            X509_free(issuer);
-            ctx->error = X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT;
-            ctx->current_cert = x;
-            ctx->error_depth = i - 1;
-            bad_chain = 1;
-            if (!call_verify_cb(0, ctx)) {
-              goto end;
-            }
-          } else {
-            // We have a match: replace certificate with store
-            // version so we get any trust settings.
-            X509_free(x);
-            x = issuer;
-            (void)sk_X509_set(ctx->chain, i - 1, x);
-            ctx->last_untrusted = 0;
-          }
-        } else {
-          // extract and save self signed certificate for later use
-          chain_ss = sk_X509_pop(ctx->chain);
-          ctx->last_untrusted--;
-          num--;
-          j--;
-          x = sk_X509_value(ctx->chain, num - 1);
-        }
+        break;
       }
-      // We now lookup certs from the certificate store
-      for (;;) {
-        if (num >= max_chain) {
-          // FIXME: If this happens, we should take note of it and, if
-          // appropriate, use the X509_V_ERR_CERT_CHAIN_TOO_LONG error code
-          // later.
-          break;
-        }
-        if (!cert_self_signed(x, &is_self_signed)) {
-          ctx->error = X509_V_ERR_INVALID_EXTENSION;
-          goto end;
-        }
-        // If we are self signed, we break
-        if (is_self_signed) {
-          break;
-        }
-        X509 *issuer = get_trusted_issuer(ctx, x);
-        if (issuer == nullptr) {
-          break;
-        }
-        x = issuer;
-        if (!sk_X509_push(ctx->chain, x)) {
-          X509_free(issuer);
-          ctx->error = X509_V_ERR_OUT_OF_MEM;
-          goto end;
-        }
-        num++;
+      X509 *issuer = get_trusted_issuer(ctx, x);
+      if (issuer == nullptr) {
+        break;
       }
-
-      // we now have our chain, lets check it...
-      trust = check_trust(ctx);
-
-      // If explicitly rejected error
-      if (trust == X509_TRUST_REJECTED) {
+      x = issuer;
+      if (!sk_X509_push(ctx->chain, x)) {
+        X509_free(issuer);
+        ctx->error = X509_V_ERR_OUT_OF_MEM;
         goto end;
       }
-      // If it's not explicitly trusted then check if there is an alternative
-      // chain that could be used. We only do this if we haven't already
-      // checked via TRUSTED_FIRST and the user hasn't switched off alternate
-      // chain checking
-      retry = 0;
-      if (trust != X509_TRUST_TRUSTED &&
-          !(ctx->param->flags & X509_V_FLAG_TRUSTED_FIRST) &&
-          !(ctx->param->flags & X509_V_FLAG_NO_ALT_CHAINS)) {
-        while (j-- > 1) {
-          X509 *issuer =
-              get_trusted_issuer(ctx, sk_X509_value(ctx->chain, j - 1));
-          // Check if we found an alternate chain
-          if (issuer != nullptr) {
-            // Free up the found cert we'll add it again later
-            X509_free(issuer);
+      num++;
+    }
 
-            // Dump all the certs above this point - we've found an
-            // alternate chain
-            while (num > j) {
-              X509_free(sk_X509_pop(ctx->chain));
-              num--;
-            }
-            ctx->last_untrusted = (int)sk_X509_num(ctx->chain);
-            retry = 1;
-            break;
-          }
-        }
-      }
-    } while (retry);
+    // we now have our chain, lets check it...
+    trust = check_trust(ctx);
+
+    // If explicitly rejected error
+    if (trust == X509_TRUST_REJECTED) {
+      goto end;
+    }
 
     // If not explicitly trusted then indicate error unless it's a single
     // self signed certificate in which case we've indicated an error already
