@@ -136,6 +136,9 @@ pub struct ReceiveBuffer<'a> {
     _p: PhantomData<&'a mut [u8]>,
 }
 
+// Safety: by construction `ReceiveBuffer` owns the buffer region for exclusive access.
+unsafe impl Send for ReceiveBuffer<'_> {}
+
 impl<'a> ReceiveBuffer<'a> {
     /// Create a new receiver buffer, with uninitialised bytes.
     pub fn new_uninit(buffer: &'a mut [MaybeUninit<u8>]) -> Self {

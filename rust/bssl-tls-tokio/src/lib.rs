@@ -141,6 +141,7 @@ use bssl_tls::io::unix::{
     UseFd, //
 };
 use bssl_tls::{
+    ReceiveBuffer,
     connection::{
         Client,
         Server,
@@ -156,7 +157,7 @@ use bssl_tls::{
     io::{
         AbstractReader, AbstractSocket, AbstractSocketResult, AbstractWriter, IoStatus,
         NoAsyncContext, stdio::PollFor,
-    }, //
+    },
 };
 
 #[cfg(test)]
@@ -337,6 +338,18 @@ impl<T> PollFor<T> for TokioOverFd {
 /// Wrapper for datagram sockets to satisfy orphan rule.
 pub struct TokioDatagramIo<T>(pub T);
 
+#[inline]
+fn os_has_no_resource(err: &io::Error) -> bool {
+    #[cfg(unix)]
+    {
+        matches!(err.raw_os_error(), Some(libc::ENOBUFS | libc::ENOMEM))
+    }
+    #[cfg(not(unix))]
+    {
+        false
+    }
+}
+
 macro_rules! gen_impl_datagram {
     ($ty:ty) => {
         impl AbstractReader for TokioDatagramIo<$ty> {
@@ -369,7 +382,13 @@ macro_rules! gen_impl_datagram {
                 match self.0.poll_send(cx, buf) {
                     Poll::Pending => AbstractSocketResult::Retry,
                     Poll::Ready(Ok(len)) => AbstractSocketResult::Ok(len),
-                    Poll::Ready(Err(e)) => translate_stdio_err(e),
+                    Poll::Ready(Err(e)) => {
+                        if os_has_no_resource(&e) {
+                            AbstractSocketResult::Ok(buf.len())
+                        } else {
+                            translate_stdio_err(e)
+                        }
+                    }
                 }
             }
 
@@ -423,18 +442,21 @@ impl<R> AsyncRead for TokioTlsConnection<R> {
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
-        // Note: This assumes `aread_inner` is made public in `bssl-tls`.
-        let status = match self
-            .inner
-            .as_pin_mut()
-            .aread_inner(buf.initialize_unfilled(), cx)
-        {
+        let mut recv_buf = ReceiveBuffer::new_uninit(unsafe {
+            // Safety: we will only ever advance the cursor.
+            buf.unfilled_mut()
+        });
+        let status = match self.inner.as_pin_mut().async_poll_read(&mut recv_buf, cx) {
             Ok(Some(status)) => status,
             Ok(None) => return Poll::Pending,
             Err(e) => return Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, e))),
         };
         match status {
             IoStatus::Ok(bytes) => {
+                unsafe {
+                    // Safety: BoringSSL filled `bytes` bytes.
+                    buf.assume_init(bytes);
+                }
                 buf.advance(bytes);
                 Poll::Ready(Ok(()))
             }
@@ -453,8 +475,7 @@ impl<R> AsyncWrite for TokioTlsConnection<R> {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        // Note: This assumes `awrite_inner` is made public in `bssl-tls`.
-        let status = match self.inner.as_pin_mut().awrite_inner(buf, cx) {
+        let status = match self.inner.as_pin_mut().async_poll_write(buf, cx) {
             Ok(Some(status)) => status,
             Ok(None) => return Poll::Pending,
             Err(e) => return Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, e))),
@@ -470,8 +491,7 @@ impl<R> AsyncWrite for TokioTlsConnection<R> {
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        // Note: This assumes `aflush_inner` is made public in `bssl-tls`.
-        let status = match self.inner.as_pin_mut().aflush_inner(cx) {
+        let status = match self.inner.as_pin_mut().async_poll_flush(cx) {
             Ok(Some(status)) => status,
             Ok(None) => return Poll::Pending,
             Err(e) => return Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, e))),
@@ -487,8 +507,7 @@ impl<R> AsyncWrite for TokioTlsConnection<R> {
     }
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        // Note: This assumes `ashutdown_inner` is made public in `bssl-tls`.
-        match self.inner.as_pin_mut().ashutdown_inner(cx) {
+        match self.inner.as_pin_mut().async_poll_shutdown(cx) {
             Ok(Some(ShutdownStatus::CloseNotifyReceived)) => Poll::Ready(Ok(())),
             Ok(Some(ShutdownStatus::RemainingApplicationData)) => Poll::Ready(Err(io::Error::new(
                 io::ErrorKind::Other,

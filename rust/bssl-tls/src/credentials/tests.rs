@@ -44,6 +44,7 @@ use crate::{
         TlsMode, //
     },
     errors::Error,
+    ffi::ReceiveBuffer,
     tests::{
         P256_SERVER_CERT,
         P256_SERVER_CERT_DER,
@@ -584,14 +585,16 @@ fn psk_rpk_fallback_test() -> Result<(), Box<dyn std::error::Error + Send + Sync
             client_conn.as_pin_mut().async_write(b"hello").await?;
 
             let mut server_buf = [0u8; 5];
-            let read_len = server_conn.as_pin_mut().async_read(&mut server_buf).await?;
+            let mut recv_buf = ReceiveBuffer::new(&mut server_buf);
+            let read_len = server_conn.as_pin_mut().async_read(&mut recv_buf).await?;
             assert!(matches!(read_len, IoStatus::Ok(5)));
             assert_eq!(&server_buf, b"hello");
 
             server_conn.as_pin_mut().async_write(b"world").await?;
 
             let mut client_buf = [0u8; 5];
-            let read_len = client_conn.as_pin_mut().async_read(&mut client_buf).await?;
+            let mut recv_buf = ReceiveBuffer::new(&mut client_buf);
+            let read_len = client_conn.as_pin_mut().async_read(&mut recv_buf).await?;
             assert!(matches!(read_len, IoStatus::Ok(5)));
             assert_eq!(&client_buf, b"world");
 

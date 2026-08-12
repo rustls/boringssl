@@ -43,13 +43,14 @@ use crate::{
         methods::HasTlsConnectionMethod, //
     },
     context::{
-        HasBasicIo,
+        HasShutdown,
         SupportedMode,
         TlsMode, //
     },
     credentials::TlsCredential,
     errors::{
         Error,
+        IoError,
         TlsErrorReason,
         TlsRetryReason, //
     },
@@ -139,10 +140,14 @@ where
         &mut self,
         alert: AlertDescription,
     ) -> Result<Option<TlsRetryReason>, Error> {
-        Ok(check_tls_error!(self.ptr(), {
+        let ret = check_tls_error!(self.ptr(), {
             // Safety: `self.0` is still a valid handle and `alert` is valid by construction.
             bssl_sys::SSL_send_fatal_alert(self.ptr(), alert as u8)
-        }))
+        });
+        if let Some(err) = self.take_io_err() {
+            return Err(Error::Io(IoError::Transport(err)));
+        }
+        Ok(ret)
     }
 
     /// Send fatal alert asynchronously.
@@ -184,7 +189,7 @@ impl<R, M> TlsConnectionInHandshake<'_, R, M> {
 /// # Handshake
 impl<R, M> TlsConnection<R, M>
 where
-    M: HasTlsConnectionMethod,
+    M: SupportedMode,
 {
     /// Drive the handshake.
     ///
@@ -196,13 +201,17 @@ where
     /// before this method can make progress again.
     pub fn do_handshake(&mut self) -> Result<Option<TlsRetryReason>, Error> {
         let conn = self.ptr();
-        Ok(check_tls_error!(conn, bssl_sys::SSL_do_handshake(conn)))
+        let ret = check_tls_error!(conn, bssl_sys::SSL_do_handshake(conn));
+        if let Some(err) = self.take_io_err() {
+            return Err(Error::Io(IoError::Transport(err)));
+        }
+        Ok(ret)
     }
 }
 
 impl<M> TlsConnection<Server, M>
 where
-    M: HasTlsConnectionMethod,
+    M: SupportedMode,
 {
     /// Accept a connection by responding to `ClientHello` with `ServerHello`.
     ///
@@ -216,7 +225,7 @@ where
 
 impl<M> TlsConnection<Client, M>
 where
-    M: HasTlsConnectionMethod,
+    M: SupportedMode,
 {
     /// Initiate a connection by sending a `ClientHello`.
     ///
@@ -248,7 +257,7 @@ impl<R, M> DerefMut for EstablishedTlsConnection<'_, R, M> {
 
 impl<R, M> EstablishedTlsConnection<'_, R, M>
 where
-    M: HasTlsConnectionMethod + HasBasicIo,
+    M: HasTlsConnectionMethod + HasShutdown,
 {
     /// Perform synchronising shutdown.
     ///
@@ -275,9 +284,6 @@ where
             // Safety: we have exclusive access to the connection state.
             bssl_sys::SSL_shutdown(self.ptr())
         };
-        if self.is_write_closed() {
-            return Ok(Some(ShutdownStatus::EndOfStream));
-        }
         match rc {
             0 => Ok(Some(ShutdownStatus::CloseNotifyPosted)),
             1 => Ok(Some(ShutdownStatus::CloseNotifyReceived)),
@@ -288,6 +294,9 @@ where
                 }
                 Ok(IoStatus::Retry(TlsRetryReason::WantRead | TlsRetryReason::WantWrite)) => {
                     Ok(None)
+                }
+                Ok(IoStatus::Retry(TlsRetryReason::Syscall)) => {
+                    Ok(Some(ShutdownStatus::EndOfStream))
                 }
                 Ok(IoStatus::Retry(reason)) => panic!("unexpected retry reason {reason:?}"),
                 Err(Error::TlsReason(TlsErrorReason::ApplicationDataOnShutdown)) => {

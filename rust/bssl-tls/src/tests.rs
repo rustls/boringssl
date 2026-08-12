@@ -106,7 +106,8 @@ fn dumb_server_client() -> Result<(TlsConnection<Server>, TlsConnection<Client>)
 fn sync_ping_pong<
     M: crate::connection::methods::HasTlsConnectionMethod
         + crate::context::SupportedMode
-        + crate::context::HasBasicIo
+        + crate::context::HasStreamIo
+        + crate::context::HasShutdown
         + 'static,
 >(
     mut server_conn: TlsConnection<Server, M>,
@@ -447,11 +448,12 @@ fn test_async() -> Result<(), Error> {
 
         let server_data = async move {
             let mut buf = [0u8; TEST_DATA.len()];
+            let mut message = ReceiveBuffer::new(&mut buf);
             let mut read_bytes = 0;
             while read_bytes < TEST_DATA.len() {
                 match server_conn
                     .as_pin_mut()
-                    .async_read(&mut buf[read_bytes..])
+                    .async_read(&mut message)
                     .await
                     .unwrap()
                 {

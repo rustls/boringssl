@@ -33,6 +33,7 @@
 extern crate alloc;
 extern crate core;
 
+use alloc::boxed::Box;
 use core::panic::AssertUnwindSafe;
 
 pub mod alerts;
