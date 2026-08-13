@@ -15,17 +15,20 @@
 #include <benchmark/benchmark.h>
 
 #include <openssl/base.h>
+#include <openssl/bn.h>
+#include <openssl/bytestring.h>
 #include <openssl/ec.h>
 #include <openssl/ec_key.h>
 #include <openssl/ecdh.h>
-#include <openssl/err.h>
-#include <openssl/evp.h>
-#include <openssl/mem.h>
 
 #include "./internal.h"
 
 BSSL_NAMESPACE_BEGIN
 namespace {
+
+// P-521 has degree 521, requiring ceil(521 / 8) = 66 bytes.
+static constexpr size_t kMaxCoordinateSize = 66;
+static constexpr size_t kMaxPointBytes = 1 + 2 * kMaxCoordinateSize;
 
 void BM_SpeedECDH(benchmark::State &state, const EC_GROUP *group) {
   UniquePtr<EC_KEY> peer_key(EC_KEY_new());
@@ -44,7 +47,7 @@ void BM_SpeedECDH(benchmark::State &state, const EC_GROUP *group) {
     return;
   }
 
-  uint8_t secret[66];
+  uint8_t secret[kMaxCoordinateSize];
   size_t secret_len = (EC_GROUP_get_degree(group) + 7) / 8;
   if (secret_len > sizeof(secret)) {
     state.SkipWithError("secret length exceeds buffer size.");
@@ -67,6 +70,99 @@ void BM_SpeedECDH(benchmark::State &state, const EC_GROUP *group) {
   }
 }
 
+// Given a public key from the peer, benchmark the combination of keygen,
+// parsing the peer key, and ECDH. This is the sequence of operations done by
+// the receiving side of an ephemeral ECDH exchange, as in TLS. We benchmark
+// them together for an apples-to-apples comparison across other ephemeral key
+// exchanges. For example, this is analogous to parse and encap in ML-KEM.
+//
+// This benchmark could equivalently be calling into EC_KEY_generate and
+// ECDH_compute_key. We have decided to not call them to exactly mirror what
+// libssl does.
+void BM_SpeedECDHEphemeral(benchmark::State &state, const EC_GROUP *group) {
+  size_t secret_len = (EC_GROUP_get_degree(group) + 7) / 8;
+  if (secret_len > kMaxCoordinateSize) {
+    state.SkipWithError("secret length exceeds buffer size.");
+    return;
+  }
+
+  UniquePtr<BIGNUM> peer_priv(BN_new());
+  UniquePtr<EC_POINT> peer_pub(EC_POINT_new(group));
+  if (!peer_priv || !peer_pub ||
+      !BN_rand_range_ex(peer_priv.get(), 1, EC_GROUP_get0_order(group)) ||
+      !EC_POINT_mul(group, peer_pub.get(), peer_priv.get(), nullptr, nullptr,
+                    nullptr)) {
+    state.SkipWithError("peer keygen failed.");
+    return;
+  }
+
+  uint8_t peer_pub_bytes[kMaxPointBytes];
+  size_t peer_pub_bytes_len =
+      EC_POINT_point2oct(group, peer_pub.get(), POINT_CONVERSION_UNCOMPRESSED,
+                         peer_pub_bytes, sizeof(peer_pub_bytes), nullptr);
+  if (peer_pub_bytes_len == 0) {
+    state.SkipWithError("peer key serialization failed.");
+    return;
+  }
+
+  for (auto _ : state) {
+    benchmark::ClobberMemory();
+
+    // Generate an ephemeral keypair.
+    UniquePtr<BIGNUM> priv(BN_new());
+    UniquePtr<EC_POINT> pub(EC_POINT_new(group));
+    if (!priv || !pub ||
+        !BN_rand_range_ex(priv.get(), 1, EC_GROUP_get0_order(group)) ||
+        !EC_POINT_mul(group, pub.get(), priv.get(), nullptr, nullptr,
+                      nullptr)) {
+      state.SkipWithError("self keygen failed.");
+      return;
+    }
+
+    ScopedCBB cbb;
+    if (!CBB_init(cbb.get(), kMaxPointBytes) ||
+        !EC_POINT_point2cbb(cbb.get(), group, pub.get(),
+                            POINT_CONVERSION_UNCOMPRESSED, nullptr)) {
+      state.SkipWithError("self key serialization failed.");
+      return;
+    }
+    benchmark::DoNotOptimize(CBB_data(cbb.get()));
+
+    // Parse the peer's public key point and compute the shared secret.
+    UniquePtr<EC_POINT> peer_point(EC_POINT_new(group));
+    UniquePtr<EC_POINT> result(EC_POINT_new(group));
+    UniquePtr<BIGNUM> x(BN_new());
+    if (!peer_point || !result || !x) {
+      state.SkipWithError("allocation failed.");
+      return;
+    }
+
+    if (peer_pub_bytes_len == 0 ||
+        peer_pub_bytes[0] != POINT_CONVERSION_UNCOMPRESSED ||
+        !EC_POINT_oct2point(group, peer_point.get(), peer_pub_bytes,
+                            peer_pub_bytes_len, nullptr)) {
+      state.SkipWithError("peer key parsing failed.");
+      return;
+    }
+
+    if (!EC_POINT_mul(group, result.get(), nullptr, peer_point.get(),
+                      priv.get(), nullptr) ||
+        !EC_POINT_get_affine_coordinates_GFp(group, result.get(), x.get(),
+                                             nullptr, nullptr)) {
+      state.SkipWithError("shared secret derivation failed.");
+      return;
+    }
+
+    uint8_t secret[kMaxCoordinateSize];
+    if (!BN_bn2bin_padded(secret, secret_len, x.get())) {
+      state.SkipWithError("secret padding failed.");
+      return;
+    }
+
+    benchmark::DoNotOptimize(secret);
+  }
+}
+
 BSSL_BENCH_LAZY_REGISTER() {
   BENCHMARK_CAPTURE(BM_SpeedECDH, p224, EC_group_p224())
       ->Apply(bench::SetThreads);
@@ -75,6 +171,15 @@ BSSL_BENCH_LAZY_REGISTER() {
   BENCHMARK_CAPTURE(BM_SpeedECDH, p384, EC_group_p384())
       ->Apply(bench::SetThreads);
   BENCHMARK_CAPTURE(BM_SpeedECDH, p521, EC_group_p521())
+      ->Apply(bench::SetThreads);
+
+  BENCHMARK_CAPTURE(BM_SpeedECDHEphemeral, p224, EC_group_p224())
+      ->Apply(bench::SetThreads);
+  BENCHMARK_CAPTURE(BM_SpeedECDHEphemeral, p256, EC_group_p256())
+      ->Apply(bench::SetThreads);
+  BENCHMARK_CAPTURE(BM_SpeedECDHEphemeral, p384, EC_group_p384())
+      ->Apply(bench::SetThreads);
+  BENCHMARK_CAPTURE(BM_SpeedECDHEphemeral, p521, EC_group_p521())
       ->Apply(bench::SetThreads);
 }
 
