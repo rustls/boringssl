@@ -18,6 +18,8 @@
 #include <openssl/evp.h>
 #include <openssl/span.h>
 
+#include <assert.h>
+
 #include "../internal.h"
 #include "./internal.h"
 
