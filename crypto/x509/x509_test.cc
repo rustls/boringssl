@@ -10485,6 +10485,41 @@ TEST(X509Test, GetEmail) {
     std::sort(actual.begin(), actual.end());
     EXPECT_EQ(actual, expected);
   }
+
+  // An invalid SAN extension should cause X509_get1_email and
+  // X509_REQ_get1_email to fail.
+  {
+    cert = MakeTestCert("Issuer", "Subject", p256.get(), /*is_ca=*/false);
+    ASSERT_TRUE(cert);
+    ASSERT_TRUE(X509_set_subject_name(cert.get(), subject.get()));
+    UniquePtr<X509_EXTENSION> ext(X509_EXTENSION_new());
+    ASSERT_TRUE(ext);
+    // Set an invalid (empty) SAN.
+    ASSERT_TRUE(X509_EXTENSION_set_object(ext.get(),
+                                          OBJ_nid2obj(NID_subject_alt_name)));
+    ASSERT_TRUE(X509_add_ext(cert.get(), ext.get(), -1));
+    ASSERT_TRUE(X509_sign(cert.get(), p256.get(), EVP_sha256()));
+
+    EXPECT_EQ(nullptr, X509_get1_email(cert.get()));
+  }
+  {
+    req.reset(X509_REQ_new());
+    ASSERT_TRUE(req);
+    ASSERT_TRUE(X509_REQ_set_subject_name(req.get(), subject.get()));
+    ASSERT_TRUE(X509_REQ_set_pubkey(req.get(), p256.get()));
+    UniquePtr<X509_EXTENSION> ext(X509_EXTENSION_new());
+    ASSERT_TRUE(ext);
+    ASSERT_TRUE(X509_EXTENSION_set_object(ext.get(),
+                                          OBJ_nid2obj(NID_subject_alt_name)));
+    STACK_OF(X509_EXTENSION) *exts_raw = sk_X509_EXTENSION_new_null();
+    ASSERT_TRUE(exts_raw);
+    UniquePtr<STACK_OF(X509_EXTENSION)> exts(exts_raw);
+    ASSERT_TRUE(PushToStack(exts.get(), std::move(ext)));
+    ASSERT_TRUE(X509_REQ_add_extensions(req.get(), exts.get()));
+    ASSERT_TRUE(X509_REQ_sign(req.get(), p256.get(), EVP_sha256()));
+
+    EXPECT_EQ(nullptr, X509_REQ_get1_email(req.get()));
+  }
 }
 
 TEST(X509Test, GetOCSP) {
