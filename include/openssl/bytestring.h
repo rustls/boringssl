@@ -719,6 +719,17 @@ OPENSSL_EXPORT int CBB_add_asn1_relative_oid_from_text(CBB *cbb,
                                                        const char *text,
                                                        size_t len);
 
+// CBB_add_asn1_relative_oid_from_der_to_text reads `data_len` bytes of
+// DER-encoded ASN.1 RELATIVE-OID contents (not including the element framing)
+// from `data` and writes the ASCII representation (e.g., "32473.1") to `cbb`
+// (without a trailing NUL byte). It returns one on success and zero on
+// failure.
+//
+// This function may fail if `data` is an invalid RELATIVE-OID, or if any OID
+// components are too large.
+OPENSSL_EXPORT int CBB_add_asn1_relative_oid_from_der_to_text(
+    CBB *cbb, const uint8_t *data, size_t data_len);
+
 // CBB_add_asn1_oid_component appends a single OID component to `cbb`.
 // It returns one on success and zero on error.
 //
