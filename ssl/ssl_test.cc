@@ -1605,33 +1605,6 @@ TEST(SSLTest, CipherProperties) {
   }
 }
 
-// CreateSessionWithTicket returns a sample `SSL_SESSION` with the specified
-// version and ticket length or nullptr on failure.
-static bssl::UniquePtr<SSL_SESSION> CreateSessionWithTicket(uint16_t version,
-                                                            size_t ticket_len) {
-  std::vector<uint8_t> der;
-  if (!DecodeBase64(&der, kOpenSSLSession)) {
-    return nullptr;
-  }
-
-  bssl::UniquePtr<SSL_CTX> ssl_ctx(SSL_CTX_new(TLS_method()));
-  if (!ssl_ctx) {
-    return nullptr;
-  }
-  // Use a garbage ticket.
-  std::vector<uint8_t> ticket(ticket_len, 'a');
-  bssl::UniquePtr<SSL_SESSION> session(
-      SSL_SESSION_from_bytes(der.data(), der.size(), ssl_ctx.get()));
-  if (!session ||                                                   //
-      !SSL_SESSION_set_protocol_version(session.get(), version) ||  //
-      !SSL_SESSION_set_ticket(session.get(), ticket.data(), ticket.size())) {
-    return nullptr;
-  }
-  // Fix up the timeout.
-  SSL_SESSION_set_time(session.get(), time(nullptr));
-  return session;
-}
-
 static bool GetClientHello(SSL *ssl, std::vector<uint8_t> *out) {
   bssl::UniquePtr<BIO> bio(BIO_new(BIO_s_mem()));
   if (!bio) {
@@ -1660,105 +1633,6 @@ static bool GetClientHello(SSL *ssl, std::vector<uint8_t> *out) {
 
   *out = std::vector<uint8_t>(client_hello, client_hello + client_hello_len);
   return true;
-}
-
-// GetClientHelloLen creates a client SSL connection with the specified version
-// and ticket length. It returns the length of the ClientHello, not including
-// the record header, on success and zero on error.
-static size_t GetClientHelloLen(uint16_t max_version, uint16_t session_version,
-                                size_t ticket_len) {
-  bssl::UniquePtr<SSL_CTX> ctx(SSL_CTX_new(TLS_method()));
-
-  // Reduce the number of supported groups, as we need ClientHellos smaller
-  // than 254 bytes for SSLTest.Padding.
-  uint16_t groups[] = {SSL_GROUP_X25519, SSL_GROUP_SECP256R1,
-                       SSL_GROUP_SECP384R1};
-  SSL_CTX_set1_group_ids(ctx.get(), groups, sizeof(groups) / sizeof(*groups));
-
-  bssl::UniquePtr<SSL_SESSION> session =
-      CreateSessionWithTicket(session_version, ticket_len);
-  if (!ctx || !session) {
-    return 0;
-  }
-
-  // Set a one-element cipher list so the baseline ClientHello is unpadded.
-  bssl::UniquePtr<SSL> ssl(SSL_new(ctx.get()));
-  if (!ssl || !SSL_set_session(ssl.get(), session.get()) ||
-      !SSL_set_strict_cipher_list(ssl.get(), "ECDHE-RSA-AES128-GCM-SHA256") ||
-      !SSL_set_max_proto_version(ssl.get(), max_version)) {
-    return 0;
-  }
-
-  std::vector<uint8_t> client_hello;
-  if (!GetClientHello(ssl.get(), &client_hello) ||
-      client_hello.size() <= SSL3_RT_HEADER_LENGTH) {
-    return 0;
-  }
-
-  return client_hello.size() - SSL3_RT_HEADER_LENGTH;
-}
-
-TEST(SSLTest, Padding) {
-  struct PaddingVersions {
-    uint16_t max_version, session_version;
-  };
-  static const PaddingVersions kPaddingVersions[] = {
-      // Test the padding extension at TLS 1.2.
-      {TLS1_2_VERSION, TLS1_2_VERSION},
-      // Test the padding extension at TLS 1.3 with a TLS 1.2 session, so there
-      // will be no PSK binder after the padding extension.
-      {TLS1_3_VERSION, TLS1_2_VERSION},
-      // Test the padding extension at TLS 1.3 with a TLS 1.3 session, so there
-      // will be a PSK binder after the padding extension.
-      {TLS1_3_VERSION, TLS1_3_VERSION},
-
-  };
-
-  struct PaddingTest {
-    size_t input_len, padded_len;
-  };
-  static const PaddingTest kPaddingTests[] = {
-      // ClientHellos of length below 0x100 do not require padding.
-      {0xfe, 0xfe},
-      {0xff, 0xff},
-      // ClientHellos of length 0x100 through 0x1fb are padded up to 0x200.
-      {0x100, 0x200},
-      {0x123, 0x200},
-      {0x1fb, 0x200},
-      // ClientHellos of length 0x1fc through 0x1ff get padded beyond 0x200. The
-      // padding extension takes a minimum of four bytes plus one required
-      // content
-      // byte. (To work around yet more server bugs, we avoid empty final
-      // extensions.)
-      {0x1fc, 0x201},
-      {0x1fd, 0x202},
-      {0x1fe, 0x203},
-      {0x1ff, 0x204},
-      // Finally, larger ClientHellos need no padding.
-      {0x200, 0x200},
-      {0x201, 0x201},
-  };
-
-  for (const PaddingVersions &versions : kPaddingVersions) {
-    SCOPED_TRACE(versions.max_version);
-    SCOPED_TRACE(versions.session_version);
-
-    // Sample a baseline length.
-    size_t base_len =
-        GetClientHelloLen(versions.max_version, versions.session_version, 1);
-    ASSERT_NE(base_len, 0u) << "Baseline length could not be sampled";
-
-    for (const PaddingTest &test : kPaddingTests) {
-      SCOPED_TRACE(test.input_len);
-      ASSERT_LE(base_len, test.input_len) << "Baseline ClientHello too long";
-
-      size_t padded_len =
-          GetClientHelloLen(versions.max_version, versions.session_version,
-                            1 + test.input_len - base_len);
-      EXPECT_EQ(padded_len, test.padded_len)
-          << "ClientHello was not padded to expected length";
-    }
-  }
 }
 
 static bssl::UniquePtr<X509> CertFromPEM(const char *pem) {

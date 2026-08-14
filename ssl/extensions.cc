@@ -1977,25 +1977,6 @@ static bool should_offer_psk(const SSL_HANDSHAKE *hs,
          type != ssl_client_hello_outer;
 }
 
-static size_t ext_pre_shared_key_clienthello_length(
-    const SSL_HANDSHAKE *hs, ssl_client_hello_type_t type) {
-  if (!should_offer_psk(hs, type)) {
-    return 0;
-  }
-
-  // extension value, extension length, identities length, binders length.
-  size_t ret = 2 + 2 + 2 + 2;
-  for (const auto &psk : hs->pre_shared_keys) {
-    // identity
-    ret += 2 + ssl_pre_shared_key_identity(psk).size();
-    // obfuscated_ticket_age
-    ret += 4;
-    // binder
-    ret += 1 + EVP_MD_size(ssl_pre_shared_key_hash(psk));
-  }
-  return ret;
-}
-
 // ext_pre_shared_key_add_clienthello writes a pre_shared_key extension to
 // `out_extensions` and flushes `out_client_hello`, invalidating
 // `out_extensions`. `out_extensions` must be a child of `out_client_hello`.
@@ -4509,9 +4490,6 @@ bool ssl_add_clienthello_tlsext(SSL_HANDSHAKE *hs, CBB *out, CBB *out_encoded,
     return ssl_add_clienthello_tlsext_inner(hs, out, out_encoded);
   }
 
-  // Sample the length of the ClientHello thus far, including the message
-  // header.
-  size_t msg_len = SSL3_HM_HEADER_LENGTH + CBB_len(out);
   assert(out_encoded == nullptr);  // Only ClientHelloInner needs two outputs.
   SSLImpl *const ssl = hs->ssl;
   CBB extensions;
@@ -4562,61 +4540,24 @@ bool ssl_add_clienthello_tlsext(SSL_HANDSHAKE *hs, CBB *out, CBB *out_encoded,
     last_was_empty = false;
   }
 
-  // In cleartext ClientHellos, we add the padding extension to work around
-  // bugs. We also apply this padding to ClientHelloOuter, to keep the wire
-  // images aligned.
-  size_t psk_len = ext_pre_shared_key_clienthello_length(hs, type);
-  if (!SSL_is_dtls(ssl) && !SSL_is_quic(ssl) &&
-      !ssl->s3->used_hello_retry_request) {
-    msg_len += 2 /* length prefix */ + CBB_len(&extensions) + psk_len;
-    // The length of the padding extension, excluding the four-byte extension
-    // header.
-    size_t padding_len = 0;
-
-    // The final extension must be non-empty. WebSphere Application
-    // Server 7.0 is intolerant to the last extension being zero-length. See
-    // https://crbug.com/363583.
-    if (last_was_empty && psk_len == 0) {
-      padding_len = 1;
-      // The addition of the padding extension may push us into the F5 bug.
-      msg_len += 4 + padding_len;
-    }
-
-    // Add padding to workaround bugs in F5 terminators. See RFC 7685.
-    //
-    // NB: because this code works out the length of all existing extensions
-    // it MUST always appear last (save for any PSK extension).
-    if (msg_len > 0xff && msg_len < 0x200) {
-      // If our calculations already included a padding extension, remove that
-      // factor because we're about to change its length.
-      if (padding_len != 0) {
-        msg_len -= 4 + padding_len;
-      }
-      padding_len = 0x200 - msg_len;
-      // Extensions take at least four bytes to encode. WebSphere Application
-      // Server 7.0 is intolerant to the last extension being zero-length, so
-      // always include at least one byte of data if including the extension.
-      // See https://crbug.com/363583.
-      if (padding_len >= 4 + 1) {
-        padding_len -= 4;
-      } else {
-        padding_len = 1;
-      }
-    }
-
-    if (padding_len != 0 &&
-        !add_padding_extension(&extensions, TLSEXT_TYPE_padding, padding_len)) {
+  // The final extension must be non-empty. WebSphere Application Server 7.0 is
+  // intolerant to the last extension being zero-length. See
+  // https://crbug.com/363583.
+  bool offering_psk = should_offer_psk(hs, type);
+  if (!offering_psk && last_was_empty && !SSL_is_dtls(ssl) &&
+      !SSL_is_quic(ssl) && !ssl->s3->used_hello_retry_request) {
+    if (!add_padding_extension(&extensions, TLSEXT_TYPE_padding, 1)) {
       return false;
     }
   }
 
   // The PSK extension must be last, including after the padding.
-  size_t psk_len_actual;
-  if (!ext_pre_shared_key_add_clienthello(hs, out, &extensions, &psk_len_actual,
+  size_t psk_len;
+  if (!ext_pre_shared_key_add_clienthello(hs, out, &extensions, &psk_len,
                                           type)) {
     return false;
   }
-  assert(psk_len_actual == psk_len);
+  assert(offering_psk == (psk_len != 0));
   return true;
 }
 
