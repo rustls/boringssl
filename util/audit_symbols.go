@@ -76,19 +76,22 @@ var skipWeakSymbols = []*regexp.Regexp{
 	regexp.MustCompile(`^\?\?2.*`),                                      // operator new()
 	regexp.MustCompile(`^\?\?3.*`),                                      // operator delete()
 	regexp.MustCompile(`^\?\?_C\@_.*`),                                  // String literals
+	regexp.MustCompile(`^\?\?_R[0-4].*$`),                               // RTTI
+	regexp.MustCompile(`^\?__empty_global_delete(@.*)?$`),               // operator delete()
 	regexp.MustCompile(`^\?memchr(@.*)?$`),                              // memchr()
 	regexp.MustCompile(`^\?strchr(@.*)?$`),                              // strchr()
+	regexp.MustCompile(`^_Avx2WmemEnabledWeakValue$`),                   // MSVC 14.50+ CRT
 	regexp.MustCompile(`^_Check_memory_order$`),                         // std::atomic
 	regexp.MustCompile(`^__isa_available_default$`),                     // SSE
+	regexp.MustCompile(`^__real@.*`),                                    // Number literals
 	regexp.MustCompile(`^__xmm@.*`),                                     // SSE
+	regexp.MustCompile(`^_real$`),                                       // Number literals
 	regexp.MustCompile(`^_vfprintf_l$`),                                 // vfprintf()
 	regexp.MustCompile(`^_xmm$`),                                        // SSE
 	regexp.MustCompile(`^fprintf$`),                                     // fprintf()
 	regexp.MustCompile(`^snprintf$`),                                    // snprintf()
-	regexp.MustCompile(`^vsnprintf$`),                                   // vsnprintf()
-	regexp.MustCompile(`^\?\?_R[0-4].*$`),                               // RTTI
-	regexp.MustCompile(`^_Avx2WmemEnabledWeakValue$`),                   // MSVC 14.50+ CRT
 	regexp.MustCompile(`^time$`),                                        // MSVC 14.50+ CRT
+	regexp.MustCompile(`^vsnprintf$`),                                   // vsnprintf()
 
 	// Symbols in the FIPS module.
 	// They are provided for tooling only and should not be read internally.
@@ -149,7 +152,9 @@ func guessArchiveFiles() []string {
 		} {
 			path := fmt.Sprintf(pattern, name)
 			if _, err := os.Stat(path); err == nil {
-				if found != "" {
+				// Note: `.lib` and `.dll` can coexist in standard MSVC builds
+				// as Windows uses "import libraries" - use the `.dll` then.
+				if found != "" && !(strings.HasSuffix(found, ".lib") && strings.HasSuffix(path, ".dll")) {
 					fmt.Fprintf(os.Stderr, "Multiple library files for lib%s found in the current directory: %s and %s - please specify explicitly, or do a clean build first.\n", name, found, path)
 					return nil // Will show usage.
 				}
