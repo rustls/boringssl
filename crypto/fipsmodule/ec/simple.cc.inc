@@ -64,12 +64,11 @@ int bssl::ec_GFp_simple_group_set_curve(EC_GROUP *group, const BIGNUM *p,
     return 0;
   }
 
-  // group->a_is_minus3
-  if (!BN_copy(tmp, a) ||
-      !BN_add_word(tmp, 3)) {
+  if (!BN_copy(tmp, a) || !BN_add_word(tmp, 3)) {
     return 0;
   }
   group->a_is_minus3 = (0 == BN_cmp(tmp, &group->field.N));
+  group->field_is_3_mod_4 = (group->field.N.d[0] & 3) == 3;
 
   return 1;
 }

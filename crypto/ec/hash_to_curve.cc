@@ -242,17 +242,13 @@ BN_ULONG sgn0(const EC_GROUP *group, const EC_FELEM *a) {
   return buf[len - 1] & 1;
 }
 
-[[maybe_unused]] static int is_3mod4(const EC_GROUP *group) {
-  return group->field.N.width > 0 && (group->field.N.d[0] & 3) == 3;
-}
-
 // sqrt_ratio_3mod4 implements the operation described in appendix F.2.1.2
 // of RFC 9380.
 BN_ULONG sqrt_ratio_3mod4(const EC_GROUP *group, const EC_FELEM *Z,
                           const BN_ULONG *c1, size_t num_c1, const EC_FELEM *c2,
                           EC_FELEM *out_y, const EC_FELEM *u,
                           const EC_FELEM *v) {
-  assert(is_3mod4(group));
+  assert(group->field_is_3_mod_4);
 
   EC_FELEM tv1, tv2, tv3, y1, y2;
   ec_felem_sqr(group, &tv1, v);                // 1. tv1 = v^2
@@ -283,7 +279,7 @@ void map_to_curve_simple_swu(const EC_GROUP *group, const EC_FELEM *Z,
                              const EC_FELEM *c2, EC_JACOBIAN *out,
                              const EC_FELEM *u) {
   // This function requires the prime be 3 mod 4, and that A = -3.
-  assert(is_3mod4(group));
+  assert(group->field_is_3_mod_4);
   assert(group->a_is_minus3);
 
   EC_FELEM tv1, tv2, tv3, tv4, tv5, tv6, x, y, y1;
