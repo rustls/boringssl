@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <cstring>
 #include <optional>
+#include <string>
 
 #include <openssl/base.h>
 #include <openssl/bytestring.h>
@@ -246,6 +247,31 @@ std::optional<TreeHashConstSpan> MTCAnchor::SubtreeHash(
     return std::nullopt;
   }
   return it->hash;
+}
+
+std::string MTCAnchor::TrustedSubtreesDebugString() const {
+  if (trusted_subtrees_.empty()) {
+    return "none";
+  }
+  std::string result;
+
+  for (const auto &[log_number, subtrees] : trusted_subtrees_) {
+    if (!result.empty()) {
+      result += ", ";
+    }
+    result += "log " + std::to_string(log_number) + ":";
+    if (subtrees.empty()) {
+      result += "empty";
+    } else {
+      // Just showing the start of first range to end of last range is an
+      // oversimplification, but showing every single range is probably too
+      // verbose.
+      result += std::to_string(subtrees.size()) + " subtrees(" +
+                std::to_string(subtrees.front().range.start) + ".." +
+                std::to_string(subtrees.back().range.end) + ")";
+    }
+  }
+  return result;
 }
 
 void MTCAnchor::CreateSyntheticCert(bssl::Span<const uint8_t> ca_id) {

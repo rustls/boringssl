@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <string>
 
 #include <inttypes.h>
 
@@ -37,6 +38,7 @@
 #include "parse_certificate.h"
 #include "parse_values.h"
 #include "signature_algorithm.h"
+#include "string_util.h"
 #include "trust_store.h"
 #include "verify_signed_data.h"
 
@@ -1390,15 +1392,6 @@ static bool VerifyMTC(const ParsedCertificate &cert,
   }
   std::optional<TreeHashConstSpan> trusted_subtree_hash =
       mtc_anchor->SubtreeHash(log_number, range);
-  if (trusted_subtree_hash) {
-    return CRYPTO_memcmp(expected_subtree_hash->data(),
-                         trusted_subtree_hash->data(),
-                         expected_subtree_hash->size()) == 0;
-  }
-
-  // Step 6: Let log_id be the log ID constructed from the CA ID in issuer and
-  // the log_number.
-  //
   // Use the ca_id from mtc_anchor instead of parsing the id out of issuer. It
   // should be guaranteed to be the same id, otherwise mtc_anchor would not
   // have been selected as the anchor for this cert.
@@ -1407,6 +1400,34 @@ static bool VerifyMTC(const ParsedCertificate &cert,
   if (!ca_id_text) {
     return false;
   }
+  if (delegate->IsDebugLogEnabled()) {
+    std::string trusted_subtree_hash_string =
+        trusted_subtree_hash ? string_util::HexEncode(*trusted_subtree_hash)
+                             : "not found";
+    delegate->DebugLog(
+        // clang-format off
+        "VerifyMTC:\n"
+        " ca_id=" + std::string(ca_id_text.get()) + "\n"
+        " log_number=" + std::to_string(log_number) + "\n"
+        " index=" + std::to_string(index) + "\n"
+        " start=" + std::to_string(start) + "\n"
+        " end=" + std::to_string(end) + "\n"
+        " expected_subtree_hash=" +
+            string_util::HexEncode(*expected_subtree_hash) + "\n"
+        " trusted_subtree_hash=" + trusted_subtree_hash_string + "\n"
+        " known_trusted_subtrees=" + mtc_anchor->TrustedSubtreesDebugString()
+            + "\n"
+        // clang-format on
+    );
+  }
+  if (trusted_subtree_hash) {
+    return CRYPTO_memcmp(expected_subtree_hash->data(),
+                         trusted_subtree_hash->data(),
+                         expected_subtree_hash->size()) == 0;
+  }
+
+  // Step 6: Let log_id be the log ID constructed from the CA ID in issuer and
+  // the log_number.
   // Section 5.1: For each positive integer N, the OID {caID logs(0) N}
   // represents the issuance log N (Section 5.2).
   std::string log_id_text = ca_id_text.get();
@@ -1460,10 +1481,14 @@ static bool VerifyMTC(const ParsedCertificate &cert,
           expected_subtree_hash.value(), signature,
           mtc_anchor->ca_signature_algorithm(), mtc_anchor->ca_key(),
           delegate->GetVerifyCache());
+
+      if (delegate->IsDebugLogEnabled()) {
+        delegate->DebugLog(std::string("VerifyMTC: CA signature ") +
+                           (found_valid_ca_signature ? "valid" : "invalid"));
+      }
     } else {
       auto cosigner = delegate->GetMTCCosigner(cosigner_id);
-      // TODO(crbug.com/452983502): output debug logs or delegate data or
-      // something for non-success cases?
+      bool this_cosignature_was_valid = false;
       if (cosigner && VerifyMTCProofSignaturePlants04(
                           &cbs_cosigner_id, StringAsBytes(log_id_text), start,
                           end, expected_subtree_hash.value(), signature,
@@ -1471,6 +1496,19 @@ static bool VerifyMTC(const ParsedCertificate &cert,
                           delegate->GetVerifyCache())) {
         valid_additional_cosigners.emplace_back(cosigner_id.begin(),
                                                 cosigner_id.end());
+        this_cosignature_was_valid = true;
+      }
+
+      if (delegate->IsDebugLogEnabled()) {
+        UniquePtr<char> cosigner_id_text_buf(
+            CBS_asn1_relative_oid_to_text(&cbs_cosigner_id));
+        const char *cosigner_id_text =
+            cosigner_id_text_buf ? cosigner_id_text_buf.get() : "<invalid ID>";
+        const char *cosignature_result_string =
+            cosigner ? (this_cosignature_was_valid ? "valid" : "invalid")
+                     : "unknown cosigner";
+        delegate->DebugLog(std::string("VerifyMTC: cosignature ") +
+                           cosigner_id_text + " " + cosignature_result_string);
       }
     }
 

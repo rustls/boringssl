@@ -183,6 +183,7 @@ class OPENSSL_EXPORT MTCAnchor {
 
   std::optional<TreeHashConstSpan> SubtreeHash(uint16_t log_number,
                                                Subtree target_range) const;
+  std::string TrustedSubtreesDebugString() const;
 
  private:
   void CreateSyntheticCert(Span<const uint8_t> ca_id);
