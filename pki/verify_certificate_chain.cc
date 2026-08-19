@@ -1127,146 +1127,6 @@ void PathVerifier::ApplyPolicyConstraints(const ParsedCertificate &cert) {
   }
 }
 
-// This function implements draft-davidben-tls-merkle-tree-certs-08 section 7.2:
-// Verifying Certificate Signatures.
-static bool VerifyMTCDraftDavidben08(const ParsedCertificate &cert,
-                                     const MTCAnchor *mtc_anchor) {
-  // Step 1: Check that the TBSCertificate's signature field is id-alg-mtcProof
-  // (kMtcProofDraftDavidben08) with omitted parameters.
-  if (cert.signature_algorithm() !=
-      SignatureAlgorithm::kMtcProofDraftDavidben08) {
-    // When we parse the signature algorithm, we check that the parameters are
-    // omitted.
-    return false;
-  }
-
-  // Step 2: Decode the signatureValue as an MTCProof.
-  CBS mtc_proof(cert.signature_value().bytes());
-  uint64_t start, end;
-  CBS inclusion_proof, signatures;
-  if (cert.signature_value().unused_bits() != 0 ||
-      !CBS_get_u64(&mtc_proof, &start) || !CBS_get_u64(&mtc_proof, &end) ||
-      !CBS_get_u16_length_prefixed(&mtc_proof, &inclusion_proof) ||
-      !CBS_get_u16_length_prefixed(&mtc_proof, &signatures) ||
-      CBS_len(&mtc_proof) != 0) {
-    return false;
-  }
-
-  // Step 3: Let index be the certificate's serial number.
-  uint64_t index;
-  if (!der::ParseUint64(cert.tbs().serial_number, &index)) {
-    return false;
-  }
-  // Step 3's revocation check is not performed in this function. The caller is
-  // responsible for performing revocation checks.
-
-  // Steps 5 and 4 are done in reverse order. Step 4 builds a value that gets
-  // embedded in step 5's MerkleTreeCertEntry `entry`, and then step 5 proceeds
-  // to prepend a value to `entry` and run all of that through a hash function.
-  // The input to the hash function is built up in a single buffer, which means
-  // steps 5 and 4 are effectively done in reverse order.
-  //
-  // Step 5:
-  //
-  //   Construct a MerkleTreeCertEntry of type tbs_cert_entry with contents the
-  //   TBSCertificateLogEntry. Let entry_hash be the hash of the entry,
-  //   MTH({entry}) = HASH(0x00 || entry), as defined in Section 2.1.1 of
-  //   [RFC9162].
-  //
-  // A MerkleTreeCertEntry is defined as follows (section 5.3):
-  //
-  //   struct {
-  //       MerkleTreeCertEntryType type;
-  //       select (type) {
-  //          case null_entry: Empty;
-  //          case tbs_cert_entry: opaque tbs_cert_entry_data[N];
-  //          /* May be extended with future types. */
-  //       }
-  //   } MerkleTreeCertEntry;
-  //
-  // When type = tbs_cert_entry (0x0001), the MerkleTreeCertEntry entry - the
-  // input to HASH(0x00 || entry) - consists of the 16-bit value 0x0001 followed
-  // by the TBSCertificateLogEntry (constructed according to the instructions in
-  // step 4). The variable `entry` below corresponds to the input to HASH, i.e.
-  // it contains 0x00 (the MTH domain separator), 0x0001
-  // (MerkleTreeCertEntryType of tbs_cert_entry), and then the
-  // TBSCertificateLogEntry.
-  ScopedCBB entry;
-  CBB tbs_cert_log_entry;
-  if (!CBB_init(entry.get(), 0) ||
-      !CBB_add_u8(entry.get(), 0 /* MTH domain separator */) ||
-      !CBB_add_u16(entry.get(), 1 /* tbs_cert_entry */) ||
-      !CBB_add_asn1(entry.get(), &tbs_cert_log_entry, CBS_ASN1_SEQUENCE)) {
-    return false;
-  }
-  // Add version (if not V1):
-  CBB version;
-  if (cert.tbs().version != CertificateVersion::V1 &&
-      (!CBB_add_asn1(&tbs_cert_log_entry, &version,
-                     CBS_ASN1_CONTEXT_SPECIFIC | CBS_ASN1_CONSTRUCTED | 0) ||
-       !CBB_add_asn1_uint64(&version,
-                            static_cast<uint64_t>(cert.tbs().version)))) {
-    return false;
-  }
-  // Add issuer, validity, subject:
-  if (!CBB_add_bytes(&tbs_cert_log_entry, cert.tbs().issuer_tlv.data(),
-                     cert.tbs().issuer_tlv.size()) ||
-      !CBB_add_bytes(&tbs_cert_log_entry, cert.tbs().validity_tlv.data(),
-                     cert.tbs().validity_tlv.size()) ||
-      !CBB_add_bytes(&tbs_cert_log_entry, cert.tbs().subject_tlv.data(),
-                     cert.tbs().subject_tlv.size())) {
-    return false;
-  }
-  // Hash SPKI and add to entry.
-  CBB spki_hash;
-  uint8_t *hash_buf;
-  if (!CBB_add_asn1(&tbs_cert_log_entry, &spki_hash, CBS_ASN1_OCTETSTRING) ||
-      !CBB_add_space(&spki_hash, &hash_buf, SHA256_DIGEST_LENGTH)) {
-    return false;
-  }
-  SHA256(cert.tbs().spki_tlv.data(), cert.tbs().spki_tlv.size(), hash_buf);
-  // Add the stuff from the cert after the SPKI (issuerUniqueID,
-  // subjectUniqueID, extensions):
-  if (!CBB_add_bytes(&tbs_cert_log_entry, cert.tbs().bytes_after_spki.data(),
-                     cert.tbs().bytes_after_spki.size())) {
-    return false;
-  }
-
-  // Finally done assembling `entry` - compute its hash:
-  if (!CBB_flush(entry.get())) {
-    return false;
-  }
-  TreeHash entry_hash;
-  SHA256(CBB_data(entry.get()), CBB_len(entry.get()), entry_hash.data());
-
-  // Step 6: Let expected_subtree_hash be the result of evaluating the
-  // MTCProof's inclusion_proof.
-  Subtree range{start, end};
-  std::optional<TreeHash> expected_subtree_hash =
-      EvaluateMerkleSubtreeInclusionProof(inclusion_proof, index, entry_hash,
-                                          range);
-  if (!expected_subtree_hash) {
-    return false;
-  }
-
-  // Step 7: If [start, end) matches a trusted subtree (Section 7.4), check that
-  // expected_subtree_hash is equal to the trusted subtree's hash. Return
-  // success if it matches and failure if it does not.
-  if (!mtc_anchor) {
-    return false;
-  }
-  std::optional<TreeHashConstSpan> trusted_subtree_hash =
-      mtc_anchor->SubtreeHash(range);
-  if (!trusted_subtree_hash) {
-    // Step 8 would check the MTCProof's signatures if there's no matching
-    // trusted subtree. This implementation does not support that check yet.
-    return false;
-  }
-  return CRYPTO_memcmp(expected_subtree_hash->data(),
-                       trusted_subtree_hash->data(),
-                       expected_subtree_hash->size()) == 0;
-}
-
 static bool VerifyMTCProofSignaturePlants04(
     const CBS *cosigner_id, Span<const uint8_t> log_id_text, uint64_t start,
     uint64_t end, const TreeHash &expected_subtree_hash,
@@ -1360,9 +1220,9 @@ static bool VerifyMTCProofSignaturePlants04(
 
 // This function implements draft-ietf-plants-merkle-tree-certs-04 section 7.2:
 // Verifying Certificate Signatures.
-static bool VerifyMTCDraftPlants04(const ParsedCertificate &cert,
-                                   const MTCAnchor *mtc_anchor,
-                                   VerifyCertificateChainDelegate *delegate) {
+static bool VerifyMTC(const ParsedCertificate &cert,
+                      const MTCAnchor *mtc_anchor,
+                      VerifyCertificateChainDelegate *delegate) {
   // Step 1: Check that the TBSCertificate's signature field is id-alg-mtcProof
   // (kMtcProofDraftPlants04) with omitted parameters.
   if (cert.signature_algorithm() !=
@@ -1620,18 +1480,6 @@ static bool VerifyMTCDraftPlants04(const ParsedCertificate &cert,
   if (found_valid_ca_signature) {
     return delegate->IsCosignatureVerificationResultAcceptable(
         mtc_anchor, std::move(valid_additional_cosigners));
-  }
-  return false;
-}
-
-static bool VerifyMTC(const ParsedCertificate &cert,
-                      const MTCAnchor *mtc_anchor,
-                      VerifyCertificateChainDelegate *delegate) {
-  switch (mtc_anchor->spec_version()) {
-    case MTCAnchor::MtcSpecVersion::kDavidben08:
-      return VerifyMTCDraftDavidben08(cert, mtc_anchor);
-    case MTCAnchor::MtcSpecVersion::kPlants04:
-      return VerifyMTCDraftPlants04(cert, mtc_anchor, delegate);
   }
   return false;
 }

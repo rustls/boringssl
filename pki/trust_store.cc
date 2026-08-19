@@ -188,26 +188,11 @@ std::optional<CertificateTrust> CertificateTrust::FromDebugString(
   return trust;
 }
 
-MTCAnchor::MTCAnchor(bssl::Span<const uint8_t> log_id,
-                     Span<const TrustedSubtree> trusted_subtrees)
-    : spec_version_(MTCAnchor::MtcSpecVersion::kDavidben08),
-      ca_id_(log_id.begin(), log_id.end()) {
-  // For davidben-08 anchors (which don't have multiple logs), stick the
-  // subtrees into the map with log_number 0. (log_number 0 is invalid in
-  // plants-04.)
-  trusted_subtrees_.emplace(
-      0, std::vector<TrustedSubtree>(trusted_subtrees.begin(),
-                                     trusted_subtrees.end()));
-  CreateSyntheticCert(log_id);
-}
-
 MTCAnchor::MTCAnchor(
-    bssl::Span<const uint8_t> ca_id,
-    SignatureAlgorithm ca_signature_algorithm,
-    bssl::UniquePtr<CRYPTO_BUFFER> ca_key,
+    Span<const uint8_t> ca_id, SignatureAlgorithm ca_signature_algorithm,
+    UniquePtr<CRYPTO_BUFFER> ca_key,
     std::map<uint16_t, std::vector<TrustedSubtree>> trusted_subtrees)
-    : spec_version_(MTCAnchor::MtcSpecVersion::kPlants04),
-      ca_id_(ca_id.begin(), ca_id.end()),
+    : ca_id_(ca_id.begin(), ca_id.end()),
       ca_signature_algorithm_(ca_signature_algorithm),
       ca_key_(std::move(ca_key)),
       trusted_subtrees_(std::move(trusted_subtrees)) {
@@ -242,12 +227,6 @@ CertificateTrust MTCAnchor::CertTrust() const {
 
 std::shared_ptr<const ParsedCertificate> MTCAnchor::AsCert() const {
   return synthetic_cert_;
-}
-
-std::optional<TreeHashConstSpan> MTCAnchor::SubtreeHash(
-    Subtree target_range) const {
-  BSSL_CHECK(spec_version_ == kDavidben08);
-  return SubtreeHash(0, target_range);
 }
 
 std::optional<TreeHashConstSpan> MTCAnchor::SubtreeHash(
