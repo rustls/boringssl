@@ -48,6 +48,7 @@ import (
 var skipWeakSymbols = []*regexp.Regexp{
 	// Symbols on Linux and other platforms with IA-64 name mangling.
 	regexp.MustCompile(`^DW\.ref\.__gxx_personality_.*`), // libstdc++ exception handling
+	regexp.MustCompile(`^_Z4ceil.*`),                     // ceil()
 	regexp.MustCompile(`^_Z6memchr.*`),                   // memchr()
 	regexp.MustCompile(`^_Z6strchr.*`),                   // strchr()
 	regexp.MustCompile(`^_ZNr?V?K?9__gnu_cxx.*`),         // __gnu_cxx::
