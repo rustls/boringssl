@@ -3286,6 +3286,9 @@ OPENSSL_EXPORT int X509_VERIFY_PARAM_set1(X509_VERIFY_PARAM *to,
 // X509_V_FLAG_NO_CHECK_TIME disables all time checks in certificate
 // verification.
 #define X509_V_FLAG_NO_CHECK_TIME 0x200000
+// X509_V_FLAG_ALLOW_TIMEZONE_OFFSET allows `notBefore` and `notAfter` fields
+// to contain a time zone offset.
+#define X509_V_FLAG_ALLOW_TIMEZONE_OFFSET 0x1000000
 
 // X509_VERIFY_PARAM_set_flags enables all values in `flags` in `param`'s
 // verification flags and returns one. `flags` should be a combination of
@@ -4349,9 +4352,23 @@ OPENSSL_EXPORT int X509_cmp_time(const ASN1_TIME *s, const time_t *t);
 // negative number if `s` <= `t` and a positive number if `s` > `t`. On error,
 // it returns zero.
 //
+// If `s` has a time zone offset, it returns an error (0).
+//
 // WARNING: Unlike most comparison functions, this function returns zero on
 // error, not equality.
 OPENSSL_EXPORT int X509_cmp_time_posix(const ASN1_TIME *s, int64_t t);
+
+// X509_cmp_time_posix_nonstandard compares `s` against `t`. On success, it
+// returns a negative number if `s` <= `t` and a positive number if `s` > `t`.
+// On error, it returns zero.
+//
+// If `s` has a time zone offset, it applies it before comparing to `t`. See
+// `ASN1_TIME_to_posix_nonstandard` for more details.
+//
+// WARNING: Unlike most comparison functions, this function returns zero on
+// error, not equality.
+OPENSSL_EXPORT int X509_cmp_time_posix_nonstandard(const ASN1_TIME *s,
+                                                   int64_t t);
 
 // X509_cmp_current_time behaves like `X509_cmp_time` but compares `s` against
 // the current time.

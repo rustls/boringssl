@@ -27,6 +27,7 @@
 #include <utility>
 #include <vector>
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <openssl/asn1.h>
@@ -5255,6 +5256,36 @@ TEST(X509Test, Expiry) {
                      X509_VERIFY_PARAM_clear_flags(param,
                                                    X509_V_FLAG_USE_CHECK_TIME);
                    }));
+
+  // Time zone offsets in notBefore and notAfter fields are rejected by default,
+  // but allowed with X509_V_FLAG_ALLOW_TIMEZONE_OFFSET.
+  UniquePtr<X509> leaf_not_before_tz =
+      MakeTestCert("Intermediate", "Leaf", key.get(), /*is_ca=*/false);
+  ASSERT_TRUE(leaf_not_before_tz);
+  ASSERT_TRUE(ASN1_STRING_set(X509_getm_notBefore(leaf_not_before_tz.get()),
+                              "160926010000+0100", 17));
+  ASSERT_TRUE(X509_sign(leaf_not_before_tz.get(), key.get(), EVP_sha256()));
+
+  EXPECT_EQ(X509_V_ERR_ERROR_IN_CERT_NOT_BEFORE_FIELD,
+            Verify(leaf_not_before_tz.get(), {root.valid.get()},
+                   {intermediate.valid.get()}, {}));
+  EXPECT_EQ(X509_V_OK, Verify(leaf_not_before_tz.get(), {root.valid.get()},
+                              {intermediate.valid.get()}, {},
+                              X509_V_FLAG_ALLOW_TIMEZONE_OFFSET));
+
+  UniquePtr<X509> leaf_not_after_tz =
+      MakeTestCert("Intermediate", "Leaf", key.get(), /*is_ca=*/false);
+  ASSERT_TRUE(leaf_not_after_tz);
+  ASSERT_TRUE(ASN1_STRING_set(X509_getm_notAfter(leaf_not_after_tz.get()),
+                              "160928010000+0100", 17));
+  ASSERT_TRUE(X509_sign(leaf_not_after_tz.get(), key.get(), EVP_sha256()));
+
+  EXPECT_EQ(X509_V_ERR_ERROR_IN_CERT_NOT_AFTER_FIELD,
+            Verify(leaf_not_after_tz.get(), {root.valid.get()},
+                   {intermediate.valid.get()}, {}));
+  EXPECT_EQ(X509_V_OK, Verify(leaf_not_after_tz.get(), {root.valid.get()},
+                              {intermediate.valid.get()}, {},
+                              X509_V_FLAG_ALLOW_TIMEZONE_OFFSET));
 }
 
 TEST(X509Test, SignatureVerification) {

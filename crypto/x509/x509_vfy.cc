@@ -1202,7 +1202,9 @@ static int check_cert_time(X509_STORE_CTX *ctx, X509 *x) {
     ptime = time(nullptr);
   }
 
-  int i = X509_cmp_time_posix(X509_get_notBefore(x), ptime);
+  int i = (ctx->param->flags & X509_V_FLAG_ALLOW_TIMEZONE_OFFSET)
+              ? X509_cmp_time_posix_nonstandard(X509_get_notBefore(x), ptime)
+              : X509_cmp_time_posix(X509_get_notBefore(x), ptime);
   if (i == 0) {
     ctx->error = X509_V_ERR_ERROR_IN_CERT_NOT_BEFORE_FIELD;
     ctx->current_cert = x;
@@ -1219,7 +1221,9 @@ static int check_cert_time(X509_STORE_CTX *ctx, X509 *x) {
     }
   }
 
-  i = X509_cmp_time_posix(X509_get_notAfter(x), ptime);
+  i = (ctx->param->flags & X509_V_FLAG_ALLOW_TIMEZONE_OFFSET)
+          ? X509_cmp_time_posix_nonstandard(X509_get_notAfter(x), ptime)
+          : X509_cmp_time_posix(X509_get_notAfter(x), ptime);
   if (i == 0) {
     ctx->error = X509_V_ERR_ERROR_IN_CERT_NOT_AFTER_FIELD;
     ctx->current_cert = x;
@@ -1327,6 +1331,15 @@ int X509_cmp_time(const ASN1_TIME *ctm, const time_t *cmp_time) {
 int X509_cmp_time_posix(const ASN1_TIME *ctm, int64_t cmp_time) {
   int64_t ctm_time;
   if (!ASN1_TIME_to_posix(ctm, &ctm_time)) {
+    return 0;
+  }
+  // The return value 0 is reserved for errors.
+  return (ctm_time - cmp_time <= 0) ? -1 : 1;
+}
+
+int X509_cmp_time_posix_nonstandard(const ASN1_TIME *ctm, int64_t cmp_time) {
+  int64_t ctm_time;
+  if (!ASN1_TIME_to_posix_nonstandard(ctm, &ctm_time)) {
     return 0;
   }
   // The return value 0 is reserved for errors.
