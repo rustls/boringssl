@@ -1243,6 +1243,39 @@ both_builders(
         "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
+# TODO(crbug.com/549361069): Promote to both_builders.
+cq_builder(
+    "linux_clang_shared_compile",
+    LINUX_HOST,
+    # TODO(crbug.com/549361069): Enable on CQ.
+    cq_enabled = False,
+    properties = compile_only({
+        "cmake_args": {
+            "BUILD_SHARED_LIBS": "1",
+        },
+        "clang": True,
+        "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_SHARED,
+    }),
+)
+# TODO(crbug.com/549361069): Promote to both_builders.
+cq_builder(
+    "linux_clang_shared_rel_compile",
+    LINUX_HOST,
+    # TODO(crbug.com/549361069): Enable on CQ.
+    cq_enabled = False,
+    properties = compile_only({
+        "cmake_args": {
+            "BUILD_SHARED_LIBS": "1",
+            "CMAKE_BUILD_TYPE": "Release",
+        },
+        "clang": True,
+        "prefixed_symbols": True,
+        "check_prefixed_symbols": True,
+        "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_SHARED,
+    }),
+)
 
 both_builders(
     "linux_nothreads",
