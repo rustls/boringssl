@@ -484,7 +484,14 @@ unsafe fn rust_bio_flush(bio: *mut bssl_sys::BIO) -> c_long {
     };
     let res = abort_on_panic(work);
     match rust_bio.transform_result(res, TlsRetryReason::WantWrite) {
-        IoStatus::Ok(_) | IoStatus::Retry(_) => 1,
+        IoStatus::Ok(_) => 1,
+        IoStatus::Retry(_) => {
+            unsafe {
+                // Safety: `bio` is still valid now.
+                bssl_sys::BIO_set_retry_write(bio);
+            }
+            0
+        }
         IoStatus::EndOfStream => {
             rust_bio.write_eos = true;
             0

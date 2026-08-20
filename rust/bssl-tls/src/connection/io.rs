@@ -26,10 +26,11 @@ use core::{
 };
 
 use crate::{
+    ReceiveBuffer,
     connection::{
+        TlsConnection,
         lifecycle::ShutdownStatus,
         methods::HasTlsConnectionMethod, //
-        TlsConnection,
     },
     context::{
         HasDatagramIo,
@@ -43,7 +44,6 @@ use crate::{
     },
     ffi::slice_into_ffi_raw_parts,
     io::IoStatus, //
-    ReceiveBuffer,
 };
 
 impl<R, M> TlsConnection<R, M>
@@ -227,7 +227,7 @@ where
             // Safety: `bio` should still be valid here.
             bssl_sys::BIO_should_retry(bio)
         };
-        if bio_retry != 1 {
+        if bio_retry != 0 {
             return Ok(IoStatus::Retry(TlsRetryReason::WantWrite));
         }
         // Pre-emptively extract error and clear the error queue.
