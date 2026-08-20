@@ -933,9 +933,6 @@ both_builders(
 both_builders(
     "ios64_prefixed_compile",
     MAC_X86_64_HOST,
-    # Redundant with mac_arm64_prefixed_compile.
-    # Thus, don't unnecessarily draw resources for it.
-    cq_enabled = False,
     properties = compile_only({
         "cmake_args": {
             "CMAKE_OSX_ARCHITECTURES": "arm64",
