@@ -476,7 +476,7 @@ impl Certificate {
         cert: &[u8],
         cache: Option<&CertificateCache>,
     ) -> Result<Vec<Self>, Error> {
-        let mut bio = Bio::from_bytes(cert).unwrap();
+        let mut bio = Bio::from_bytes(cert);
         let mut res = vec![];
         loop {
             match Self::parse_one(&mut bio, cache) {
@@ -497,7 +497,7 @@ impl Certificate {
         cert: &[u8],
         cache: Option<&CertificateCache>,
     ) -> Result<Self, Error> {
-        let mut bio = Bio::from_bytes(cert)?;
+        let mut bio = Bio::from_bytes(cert);
         let (cert, _) = Self::parse_one(&mut bio, cache)?;
         Ok(cert)
     }
