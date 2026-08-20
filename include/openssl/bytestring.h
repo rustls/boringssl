@@ -785,7 +785,8 @@ extern "C++" {
 
 BSSL_NAMESPACE_BEGIN
 
-using ScopedCBB = internal::StackAllocated<CBB, void, CBB_zero, CBB_cleanup>;
+BORINGSSL_MAKE_STACK_TRAITS(CBB, CBB_zero, CBB_cleanup)
+using ScopedCBB = internal::StackAllocated<CBB>;
 
 BSSL_NAMESPACE_END
 

@@ -634,9 +634,9 @@ extern "C++" {
 
 BSSL_NAMESPACE_BEGIN
 
-using ScopedEVP_AEAD_CTX =
-    internal::StackAllocated<EVP_AEAD_CTX, void, EVP_AEAD_CTX_zero,
-                             EVP_AEAD_CTX_cleanup>;
+BORINGSSL_MAKE_STACK_TRAITS(EVP_AEAD_CTX, EVP_AEAD_CTX_zero,
+                            EVP_AEAD_CTX_cleanup)
+using ScopedEVP_AEAD_CTX = internal::StackAllocated<EVP_AEAD_CTX>;
 
 BORINGSSL_MAKE_DELETER(EVP_AEAD_CTX, EVP_AEAD_CTX_free)
 

@@ -40,9 +40,8 @@ void x509_algor_cleanup(X509_ALGOR *alg);
 // A ScopedX509Algor is a stack-allocatable `X509_ALGOR` with managed lifetime.
 // This cannot use `DECLARE_OPAQUE_STRUCT` because `X509_ALGOR` is a public
 // struct.
-using ScopedX509Algor =
-    internal::StackAllocated<X509_ALGOR, void, x509_algor_init,
-                             x509_algor_cleanup>;
+BORINGSSL_MAKE_STACK_TRAITS(X509_ALGOR, x509_algor_init, x509_algor_cleanup)
+using ScopedX509Algor = internal::StackAllocated<X509_ALGOR>;
 
 // x509_parse_algorithm parses a DER-encoded, AlgorithmIdentifier from `cbs` and
 // writes the result to `*out`. It returns one on success and zero on error.
