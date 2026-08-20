@@ -76,7 +76,7 @@ impl<R> io::Write for TlsConnection<R, TlsMode> {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        Ok(())
+        translate_res_for_stdio(self.flush()).map(|_| ())
     }
 }
 
