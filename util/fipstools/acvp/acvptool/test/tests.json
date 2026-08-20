@@ -28,6 +28,7 @@
 {"Wrapper": "modulewrapper", "In": "vectors/ML-DSA.bz2", "Out": "expected/ML-DSA.bz2"},
 {"Wrapper": "modulewrapper", "In": "vectors/ML-DSA-seed.bz2", "Out": "expected/ML-DSA-seed.bz2"},
 {"Wrapper": "modulewrapper", "In": "vectors/ML-KEM.bz2", "Out": "expected/ML-KEM.bz2"},
+{"Wrapper": "modulewrapper", "In": "vectors/ML-KEM-encap-key-check.bz2", "Out": "expected/ML-KEM-encap-key-check.bz2"},
 {"Wrapper": "modulewrapper", "In": "vectors/ML-KEM-seed.bz2", "Out": "expected/ML-KEM-seed.bz2"},
 {"Wrapper": "modulewrapper", "In": "vectors/RSA.bz2", "Out": "expected/RSA.bz2"},
 {"Wrapper": "modulewrapper", "In": "vectors/RSA-sigGen.bz2"},
