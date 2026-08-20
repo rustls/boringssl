@@ -119,27 +119,33 @@ where
     }
 
     /// Check if the underlying **transport** has closed its write end.
-    pub fn is_write_closed(&self) -> bool {
+    ///
+    /// If the transport is still **unset**, the result is [`None`].
+    pub fn is_write_closed(&self) -> Option<bool> {
         self.get_connection_methods_ref()
             .bio
             .as_ref()
-            .map_or(true, |bio| bio.as_ref().write_eos)
+            .map(|bio| bio.as_ref().write_eos)
     }
 
     /// Check if the underlying **transport** has closed its read end.
-    pub fn is_read_closed(&self) -> bool {
+    ///
+    /// If the transport is still **unset**, the result is [`None`].
+    pub fn is_read_closed(&self) -> Option<bool> {
         self.get_connection_methods_ref()
             .bio
             .as_ref()
-            .map_or(true, |bio| bio.as_ref().read_eos)
+            .map(|bio| bio.as_ref().read_eos)
     }
 
     /// Check if the underlying **transport** has closed either its read end or its write end.
-    pub fn is_one_side_closed(&self) -> bool {
+    ///
+    /// If the transport is still **unset**, the result is [`None`].
+    pub fn is_one_side_closed(&self) -> Option<bool> {
         self.get_connection_methods_ref()
             .bio
             .as_ref()
-            .map_or(true, |bio| bio.as_ref().read_eos || bio.as_ref().write_eos)
+            .map(|bio| bio.as_ref().read_eos || bio.as_ref().write_eos)
     }
 }
 
