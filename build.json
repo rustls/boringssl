@@ -951,7 +951,6 @@
             "crypto/slhdsa/slhdsa_shake_256f_sigver.txt",
             "crypto/x509/test/*.pem",
             "crypto/x509/test/*.pk8",
-            "crypto/x509/test/mtc/*.pem",
             "third_party/wycheproof_testvectors/*.txt"
         ],
         "internal_hdrs": [

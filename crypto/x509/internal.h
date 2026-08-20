@@ -670,10 +670,6 @@ int x509_name_copy(X509_NAME *dst, const X509_NAME *src);
 
 // Merkle Tree Certificate (MTC) verification functions.
 
-// x509_is_merkle_tree_ca returns whether `x509` contains an extension of type
-// id-pe-mtcCertificationAuthority.
-bool x509_is_merkle_tree_ca(const X509 *x509);
-
 // x509_evaluate_mtc_subtree_inclusion_proof carries out the procedure in
 // section 4.3.2 of draft-ietf-plants-merkle-tree-certs to evaluate a subtree
 // inclusion proof for an entry at index `index` with hash `entry_hash` of a
@@ -689,13 +685,6 @@ bool x509_evaluate_mtc_subtree_inclusion_proof(
     Span<const uint8_t> inclusion_proof, uint64_t index,
     Span<const uint8_t> entry_hash, uint64_t subtree_start,
     uint64_t subtree_end);
-
-// x509_verify_mtc verifies `x509` as a Merkle Tree Certificate issued by
-// `issuer`, which must be an MTC CA represented in X.509 format. `pkey` is the
-// `issuer`'s public key. It returns one if the MTC is valid, or zero on error.
-// This function only checks the MTC proof itself and does not perform a full
-// certificate validation.
-int x509_verify_mtc(const X509 *x509, const EVP_PKEY *pkey, const X509 *issuer);
 
 
 // Standard extensions.

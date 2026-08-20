@@ -1243,18 +1243,6 @@ static int check_cert_time(X509_STORE_CTX *ctx, X509 *x) {
   return 1;
 }
 
-static int verify_signature(X509_STORE_CTX *ctx, const X509 *x509,
-                            const X509 *issuer, EVP_PKEY *pkey) {
-  int ret;
-  if ((ctx->param->flags & X509_V_FLAG_USE_MTC_DRAFT_PLANTS_05) &&
-      x509_is_merkle_tree_ca(issuer)) {
-    ret = x509_verify_mtc(x509, pkey, issuer);
-  } else {
-    ret = X509_verify(x509, pkey);
-  }
-  return ret ? X509_V_OK : X509_V_ERR_CERT_SIGNATURE_FAILURE;
-}
-
 static int internal_verify(X509_STORE_CTX *ctx) {
   // TODO(davidben): This logic is incredibly confusing. Rewrite this:
   //
@@ -1301,9 +1289,8 @@ static int internal_verify(X509_STORE_CTX *ctx) {
         if (!call_verify_cb(0, ctx)) {
           return 0;
         }
-      } else if (int err = verify_signature(ctx, xs, xi, pkey);
-                 err != X509_V_OK) {
-        ctx->error = err;
+      } else if (X509_verify(xs, pkey) <= 0) {
+        ctx->error = X509_V_ERR_CERT_SIGNATURE_FAILURE;
         ctx->current_cert = xs;
         if (!call_verify_cb(0, ctx)) {
           return 0;
