@@ -577,6 +577,7 @@ set(
   include/openssl/cmac.h
   include/openssl/cms.h
   include/openssl/conf.h
+  include/openssl/configuration.h
   include/openssl/cpu.h
   include/openssl/crypto.h
   include/openssl/ctrdrbg.h
@@ -641,6 +642,7 @@ set(
   include/openssl/tls_prf.h
   include/openssl/trust_token.h
   include/openssl/type_check.h
+  include/openssl/types.h
   include/openssl/x509.h
   include/openssl/x509_vfy.h
   include/openssl/x509v3.h
