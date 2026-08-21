@@ -267,7 +267,7 @@ def get_category(name, host, properties):
     return category
 
 def get_short_name(name, properties):
-    """Derives the short name for a builder.
+    """Derives the (overrideable) default short name for a builder.
 
     Args:
       name: The name of the builder.
@@ -285,6 +285,7 @@ def get_short_name(name, properties):
         tags.append("sh")
         if not properties.get("android", False):
             # We don't do shared library release builds except on Android.
+            # TODO: This is no longer true.
             untags.append("dbg")
 
     # Build features.
@@ -1243,12 +1244,10 @@ both_builders(
         "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_STATIC,
     }),
 )
-# TODO(crbug.com/549361069): Promote to both_builders.
-cq_builder(
+both_builders(
     "linux_clang_shared_compile",
     LINUX_HOST,
-    # TODO(crbug.com/549361069): Enable on CQ.
-    cq_enabled = False,
+    short_name = "shdbg",
     properties = compile_only({
         "cmake_args": {
             "BUILD_SHARED_LIBS": "1",
@@ -1259,12 +1258,10 @@ cq_builder(
         "upload_to_cas": FINISHED_OUTPUT_FILES_LINUX_SHARED,
     }),
 )
-# TODO(crbug.com/549361069): Promote to both_builders.
-cq_builder(
+both_builders(
     "linux_clang_shared_rel_compile",
     LINUX_HOST,
-    # TODO(crbug.com/549361069): Enable on CQ.
-    cq_enabled = False,
+    short_name = "shrel",
     properties = compile_only({
         "cmake_args": {
             "BUILD_SHARED_LIBS": "1",
