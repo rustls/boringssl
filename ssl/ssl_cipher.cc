@@ -21,6 +21,7 @@
 
 #include <iterator>
 
+#include <openssl/aead.h>
 #include <openssl/err.h>
 #include <openssl/md5.h>
 #include <openssl/mem.h>
@@ -1010,8 +1011,7 @@ static bool ssl_cipher_process_rulestr(const char *rule_str,
 }
 
 bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
-                            const bool has_aes_hw, const char *rule_str,
-                            bool strict) {
+                            const char *rule_str, bool strict) {
   // Return with error if nothing to do.
   if (rule_str == nullptr || out_cipher_list == nullptr) {
     return false;
@@ -1065,6 +1065,7 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
   // TODO(crbug.com/boringssl/29): We should also set up equipreference groups
   // as a server.
   size_t num = 0;
+  const bool has_aes_hw = EVP_has_aes_hardware();
   if (has_aes_hw) {
     for (uint16_t id : kAESCiphers) {
       co_list[num++].cipher = SSL_get_cipher_by_value(id);

@@ -325,11 +325,10 @@ const EVP_MD *ssl_get_handshake_digest(uint16_t version,
 // newly-allocated `SSLCipherPreferenceList` containing the result. It returns
 // true on success and false on failure. If `strict` is true, nonsense will be
 // rejected. If false, nonsense will be silently ignored. An empty result is
-// considered an error regardless of `strict`. `has_aes_hw` indicates if the
-// list should be ordered based on having support for AES in hardware or not.
+// considered an error regardless of `strict`. The resulting list will be
+// ordered based on having support for AES in hardware or not.
 bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
-                            const bool has_aes_hw, const char *rule_str,
-                            bool strict);
+                            const char *rule_str, bool strict);
 
 // ssl_cipher_auth_mask_for_key returns the mask of cipher `algorithm_auth`
 // values suitable for use with `key` in TLS 1.2 and below. `sign_ok` indicates
@@ -3580,15 +3579,6 @@ struct SSL_CONFIG {
   // permute_extensions is whether to permute extensions when sending messages.
   bool permute_extensions : 1;
 
-  // aes_hw_override if set indicates we should override checking for aes
-  // hardware support, and use the value in aes_hw_override_value instead.
-  bool aes_hw_override : 1;
-
-  // aes_hw_override_value is used for testing to indicate the support or lack
-  // of support for AES hw. The value is only considered if `aes_hw_override` is
-  // true.
-  bool aes_hw_override_value : 1;
-
   // alps_use_new_codepoint if set indicates we use new ALPS extension codepoint
   // to negotiate and convey application settings.
   bool alps_use_new_codepoint : 1;
@@ -4247,15 +4237,6 @@ class SSLContext : public ssl_ctx_st, public RefCounted<SSLContext> {
 
   // If enable_early_data is true, early data can be sent and accepted.
   bool enable_early_data : 1;
-
-  // aes_hw_override if set indicates we should override checking for AES
-  // hardware support, and use the value in aes_hw_override_value instead.
-  bool aes_hw_override : 1;
-
-  // aes_hw_override_value is used for testing to indicate the support or lack
-  // of support for AES hardware. The value is only considered if
-  // `aes_hw_override` is true.
-  bool aes_hw_override_value : 1;
 
   // resumption_across_names_enabled indicates whether a TLS 1.3 server should
   // signal its sessions may be resumed across names in the server certificate.

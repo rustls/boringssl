@@ -127,14 +127,12 @@ static bool ssl_write_client_cipher_list(const SSL_HANDSHAKE *hs, CBB *out,
         SSL_CIPHER_CHACHA20_POLY1305_SHA256,
     };
 
-    const bool has_aes_hw = ssl->config->aes_hw_override
-                                ? ssl->config->aes_hw_override_value
-                                : EVP_has_aes_hardware();
     const bssl::Span<const uint16_t> ciphers =
         ssl->config->compliance_policy == ssl_compliance_policy_cnsa_202407
             ? bssl::Span<const uint16_t>(kCiphersCNSA)
-            : (has_aes_hw ? bssl::Span<const uint16_t>(kCiphersAESHardware)
-                          : bssl::Span<const uint16_t>(kCiphersNoAESHardware));
+            : (EVP_has_aes_hardware()
+                   ? bssl::Span<const uint16_t>(kCiphersAESHardware)
+                   : bssl::Span<const uint16_t>(kCiphersNoAESHardware));
 
     for (auto cipher : ciphers) {
       if (!ssl_add_tls13_cipher(&child, cipher,
