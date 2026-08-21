@@ -2146,15 +2146,15 @@ int SSL_CTX_set_tmp_dh(SSL_CTX *ctx, const DH *dh) { return 1; }
 int SSL_set_tmp_dh(SSL *ssl, const DH *dh) { return 1; }
 
 STACK_OF(SSL_CIPHER) *SSL_CTX_get_ciphers(const SSL_CTX *ctx) {
-  return FromOpaque(ctx)->cipher_list->ciphers.get();
+  return FromOpaque(ctx)->cipher_list->ciphers();
 }
 
 int SSL_CTX_cipher_in_group(const SSL_CTX *ctx, size_t i) {
   auto *ctx_impl = FromOpaque(ctx);
-  if (i >= sk_SSL_CIPHER_num(ctx_impl->cipher_list->ciphers.get())) {
+  if (i >= sk_SSL_CIPHER_num(ctx_impl->cipher_list->ciphers())) {
     return 0;
   }
-  return ctx_impl->cipher_list->in_group_flags[i];
+  return ctx_impl->cipher_list->in_group_flags()[i];
 }
 
 STACK_OF(SSL_CIPHER) *SSL_get_ciphers(const SSL *ssl) {
@@ -2168,8 +2168,8 @@ STACK_OF(SSL_CIPHER) *SSL_get_ciphers(const SSL *ssl) {
   }
 
   return ssl_impl->config->cipher_list
-             ? ssl_impl->config->cipher_list->ciphers.get()
-             : ssl_impl->ctx->cipher_list->ciphers.get();
+             ? ssl_impl->config->cipher_list->ciphers()
+             : ssl_impl->ctx->cipher_list->ciphers();
 }
 
 const char *SSL_get_cipher_list(const SSL *ssl, int n) {

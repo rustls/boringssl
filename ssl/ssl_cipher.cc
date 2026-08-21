@@ -605,50 +605,44 @@ static void ll_append_head(CIPHER_ORDER **head, CIPHER_ORDER *curr,
   *head = curr;
 }
 
-SSLCipherPreferenceList::~SSLCipherPreferenceList() {
-  OPENSSL_free(in_group_flags);
-}
-
-bool SSLCipherPreferenceList::Init(UniquePtr<STACK_OF(SSL_CIPHER)> ciphers_arg,
-                                   Span<const bool> in_group_flags_arg) {
-  if (sk_SSL_CIPHER_num(ciphers_arg.get()) != in_group_flags_arg.size()) {
+bool SSLCipherPreferenceList::Init(UniquePtr<STACK_OF(SSL_CIPHER)> ciphers,
+                                   Array<bool> in_group_flags) {
+  if (sk_SSL_CIPHER_num(ciphers.get()) != in_group_flags.size()) {
     OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
     return false;
   }
 
-  Array<bool> copy;
-  if (!copy.CopyFrom(in_group_flags_arg)) {
-    return false;
-  }
-  ciphers = std::move(ciphers_arg);
-  size_t unused_len;
-  copy.Release(&in_group_flags, &unused_len);
+  ciphers_ = std::move(ciphers);
+  in_group_flags_ = std::move(in_group_flags);
   return true;
 }
 
-bool SSLCipherPreferenceList::Init(const SSLCipherPreferenceList &other) {
-  size_t size = sk_SSL_CIPHER_num(other.ciphers.get());
-  Span<const bool> other_flags(other.in_group_flags, size);
+bool SSLCipherPreferenceList::CopyFrom(const SSLCipherPreferenceList &other) {
   UniquePtr<STACK_OF(SSL_CIPHER)> other_ciphers(
-      sk_SSL_CIPHER_dup(other.ciphers.get()));
+      sk_SSL_CIPHER_dup(other.ciphers()));
   if (!other_ciphers) {
     return false;
   }
-  return Init(std::move(other_ciphers), other_flags);
+  Array<bool> other_flags;
+  if (!other_flags.CopyFrom(other.in_group_flags())) {
+    return false;
+  }
+  return Init(std::move(other_ciphers), std::move(other_flags));
 }
 
 void SSLCipherPreferenceList::Remove(const SSL_CIPHER *cipher) {
   size_t index;
-  if (!sk_SSL_CIPHER_find(ciphers.get(), &index, cipher)) {
+  if (!sk_SSL_CIPHER_find(ciphers_.get(), &index, cipher)) {
     return;
   }
-  if (!in_group_flags[index] /* last element of group */ && index > 0) {
-    in_group_flags[index - 1] = false;
+  if (!in_group_flags_[index] /* last element of group */ && index > 0) {
+    in_group_flags_[index - 1] = false;
   }
-  for (size_t i = index; i < sk_SSL_CIPHER_num(ciphers.get()) - 1; ++i) {
-    in_group_flags[i] = in_group_flags[i + 1];
+  for (size_t i = index; i < size() - 1; ++i) {
+    in_group_flags_[i] = in_group_flags_[i + 1];
   }
-  sk_SSL_CIPHER_delete(ciphers.get(), index);
+  sk_SSL_CIPHER_delete(ciphers_.get(), index);
+  in_group_flags_.Shrink(size());
 }
 
 bool ssl_cipher_is_deprecated(const SSL_CIPHER *cipher) {
@@ -1133,7 +1127,8 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
 
   UniquePtr<SSLCipherPreferenceList> pref_list =
       MakeUnique<SSLCipherPreferenceList>();
-  if (!pref_list || !pref_list->Init(std::move(cipherstack), in_group_flags)) {
+  if (!pref_list ||
+      !pref_list->Init(std::move(cipherstack), std::move(in_group_flags))) {
     return false;
   }
 
@@ -1141,7 +1136,7 @@ bool ssl_create_cipher_list(UniquePtr<SSLCipherPreferenceList> *out_cipher_list,
 
   // Configuring an empty cipher list is an error but still updates the
   // output.
-  if (sk_SSL_CIPHER_num((*out_cipher_list)->ciphers.get()) == 0) {
+  if (sk_SSL_CIPHER_num((*out_cipher_list)->ciphers()) == 0) {
     OPENSSL_PUT_ERROR(SSL, SSL_R_NO_CIPHER_MATCH);
     return false;
   }

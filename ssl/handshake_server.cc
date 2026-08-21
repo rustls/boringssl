@@ -160,11 +160,11 @@ static const SSL_CIPHER *choose_cipher(SSL_HANDSHAKE *hs,
                                        uint32_t mask_k, uint32_t mask_a) {
   SSLImpl *const ssl = hs->ssl;
   const STACK_OF(SSL_CIPHER) *prio, *allow;
-  // in_group_flags will either be NULL, or will point to an array of bytes
+  // in_group_flags will either be empty, or will contain an array of bytes
   // which indicate equal-preference groups in the `prio` stack. See the
   // comment about `in_group_flags` in the `SSLCipherPreferenceList`
   // struct.
-  const bool *in_group_flags;
+  Span<const bool> in_group_flags;
   // best_index contains the index of the best matching cipher suite found so
   // far, indexed into `allow`. If `best_index` is `SIZE_MAX`, no matching
   // cipher suite has been found yet.
@@ -174,18 +174,18 @@ static const SSL_CIPHER *choose_cipher(SSL_HANDSHAKE *hs,
       hs->config->cipher_list ? hs->config->cipher_list.get()
                               : ssl->ctx->cipher_list.get();
   if (ssl->options & SSL_OP_CIPHER_SERVER_PREFERENCE) {
-    prio = server_pref->ciphers.get();
-    in_group_flags = server_pref->in_group_flags;
+    prio = server_pref->ciphers();
+    in_group_flags = server_pref->in_group_flags();
     allow = client_pref;
   } else {
     prio = client_pref;
-    in_group_flags = nullptr;
-    allow = server_pref->ciphers.get();
+    in_group_flags = Span<const bool>();
+    allow = server_pref->ciphers();
   }
 
   for (size_t i = 0; i < sk_SSL_CIPHER_num(prio); i++) {
     const SSL_CIPHER *c = sk_SSL_CIPHER_value(prio, i);
-    const bool in_group = in_group_flags != nullptr && in_group_flags[i];
+    const bool in_group = !in_group_flags.empty() && in_group_flags[i];
 
     size_t cipher_index;
     if (  // Check if the cipher is supported for the current version.

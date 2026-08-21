@@ -287,20 +287,35 @@ BSSL_NAMESPACE_BEGIN
 //    A         E
 //    B -> D -> F
 //    C
-struct SSLCipherPreferenceList {
+class SSLCipherPreferenceList {
+ public:
   static constexpr bool kAllowUniquePtr = true;
 
   SSLCipherPreferenceList() = default;
-  ~SSLCipherPreferenceList();
+  ~SSLCipherPreferenceList() = default;
 
+  // Initializes a list with the specified ciphers and flags.
   bool Init(UniquePtr<STACK_OF(SSL_CIPHER)> ciphers,
-            Span<const bool> in_group_flags);
-  bool Init(const SSLCipherPreferenceList &);
+            Array<bool> in_group_flags);
 
+  // Makes `this` a deep copy of another (already initialized) instance.
+  bool CopyFrom(const SSLCipherPreferenceList &);
+
+  // Removes `cipher` from the preference list.
   void Remove(const SSL_CIPHER *cipher);
 
-  UniquePtr<STACK_OF(SSL_CIPHER)> ciphers;
-  bool *in_group_flags = nullptr;
+  size_t size() const { return sk_SSL_CIPHER_num(ciphers_.get()); }
+
+  const STACK_OF(SSL_CIPHER) *ciphers() const { return ciphers_.get(); }
+  STACK_OF(SSL_CIPHER) *ciphers() { return ciphers_.get(); }
+
+  Span<const bool> in_group_flags() const { return in_group_flags_; }
+
+ private:
+  // SSL_CIPHERs are maintained in a stack so they are easily accessible in the
+  // form required for `SSL{_CTX}_get_ciphers`.
+  UniquePtr<STACK_OF(SSL_CIPHER)> ciphers_;
+  Array<bool> in_group_flags_;
 };
 
 // AllCiphers returns an array of all supported ciphers, sorted by id.
