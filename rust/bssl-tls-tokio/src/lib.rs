@@ -18,8 +18,6 @@
     clippy::missing_safety_doc,
     clippy::indexing_slicing,
     clippy::unwrap_used,
-    clippy::panic,
-    clippy::expect_used,
     clippy::undocumented_unsafe_blocks
 )]
 
