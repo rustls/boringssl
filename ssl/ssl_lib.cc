@@ -2177,8 +2177,9 @@ const char *SSL_get_cipher_list(const SSL *ssl, int n) {
     return nullptr;
   }
 
-  STACK_OF(SSL_CIPHER) *sk = SSL_get_ciphers(ssl);
-  if (sk == nullptr || n < 0 || (size_t)n >= sk_SSL_CIPHER_num(sk)) {
+  const STACK_OF(SSL_CIPHER) *sk = SSL_get_ciphers(ssl);
+  if (sk == nullptr || n < 0 ||
+      static_cast<size_t>(n) >= sk_SSL_CIPHER_num(sk)) {
     return nullptr;
   }
 
