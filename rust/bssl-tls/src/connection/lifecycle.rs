@@ -102,32 +102,6 @@ impl<R, M> TlsConnection<R, M> {
     }
 }
 
-bssl_macros::bssl_enum! {
-    /// TLS data-pending reasons
-    pub enum TlsPendingData: i32 {
-        /// TLS connection wants to read more data.
-        WantRead = bssl_sys::SSL_READING as i32,
-        /// TLS connection wants to write more data.
-        WantWrite = bssl_sys::SSL_WRITING as i32,
-    }
-}
-
-/// # Connection state
-///
-/// When operations on [`TlsConnection`] return with pending status,
-/// there will be reasons why the operations should be retried.
-impl<R, M> TlsConnection<R, M> {
-    /// Check the connection if it needs additional data.
-    pub fn wants_data(&self) -> Option<TlsPendingData> {
-        let code = unsafe {
-            // Safety: the validity of the handle is witnessed by `self`.
-            bssl_sys::SSL_want(self.ptr())
-        };
-        let code = i32::try_from(code).ok()?;
-        TlsPendingData::try_from(code).ok()
-    }
-}
-
 /// # Alerts
 impl<R, M> TlsConnection<R, M>
 where
