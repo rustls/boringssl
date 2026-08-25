@@ -168,10 +168,21 @@ int ec_felem_to_bignum(const EC_GROUP *group, BIGNUM *out, const EC_FELEM *in);
 void ec_felem_to_bytes(const EC_GROUP *group, uint8_t *out, size_t *out_len,
                        const EC_FELEM *in);
 
-// ec_felem_from_bytes deserializes `in` and stores the resulting field element
-// to `out`. It returns one on success and zero if `in` is invalid.
+// ec_felem_from_bytes deserializes `in` as a big-endian field element and
+// stores the result to `out`. It returns one on success and zero if `in` is
+// invalid.
 int ec_felem_from_bytes(const EC_GROUP *group, EC_FELEM *out, const uint8_t *in,
                         size_t len);
+
+// ec_felem_from_bytes_or_placeholder deserializes `in` as a big-endian field
+// element. On success, it stores the resulting field element to `out` and
+// returns `CONSTTIME_TRUE_W`. If `in` is out of range, it sets `out` to an
+// arbitrary field element and returns `CONSTTIME_FALSE_W`. Both `in`, and
+// whether it was in range, are treated as secret. `len` must be equal to
+// `BN_num_words(field)` or the function will abort.
+crypto_word_t ec_felem_from_bytes_or_placeholder(const EC_GROUP *group,
+                                                 EC_FELEM *out,
+                                                 const uint8_t *in, size_t len);
 
 // ec_felem_neg sets `out` to -`a`.
 void ec_felem_neg(const EC_GROUP *group, EC_FELEM *out, const EC_FELEM *a);
@@ -296,6 +307,9 @@ int ec_jacobian_to_affine(const EC_GROUP *group, EC_AFFINE *out,
 // needed.
 int ec_jacobian_to_affine_batch(const EC_GROUP *group, EC_AFFINE *out,
                                 const EC_JACOBIAN *in, size_t num);
+
+// ec_y_sqr_from_x sets `out` to `x^3 + ax + b`, the expected value of y^2.
+void ec_y_sqr_from_x(const EC_GROUP *group, EC_FELEM *out, const EC_FELEM *x);
 
 // ec_point_set_affine_coordinates sets `out` to a point with affine coordinates
 // `x` and `y`. It returns one if the point is on the curve and zero otherwise.

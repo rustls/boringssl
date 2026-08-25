@@ -1557,6 +1557,83 @@ TEST(ECTest, WPA3SAEHashToCurve) {
       EC_group_p384(), point.get(), kSalt, sizeof(kSalt), kIKM, sizeof(kIKM)));
 }
 
+// Test the WPA3 SAE hunt-and-peck construction.
+TEST(ECTest, WPA3SAEHuntAndPeck) {
+  // Test vector from Appendix J.10 of IEEE Std 802.11-2024. The earlier MAC
+  // address goes first, so the order is flipped from the test vector.
+  static const uint8_t kSalt[] = {0xa5, 0xd8, 0xaa, 0x95, 0x8e, 0x3c,
+                                  0x4d, 0x3f, 0x2f, 0xff, 0xe3, 0x87};
+  static const uint8_t kIKM[] = {0x6d, 0x65, 0x6b, 0x6d, 0x69, 0x74, 0x61,
+                                 0x73, 0x64, 0x69, 0x67, 0x6f, 0x61, 0x74};
+  static const uint8_t kExpected[] = {
+      0x04, 0xda, 0x6e, 0xb7, 0xb0, 0x6a, 0x1a, 0xc5, 0x62, 0x49, 0x74,
+      0xf9, 0x0a, 0xfd, 0xd6, 0xa8, 0xe9, 0xd5, 0x72, 0x26, 0x34, 0xcf,
+      0x98, 0x7c, 0x34, 0xde, 0xfc, 0x91, 0xa9, 0x87, 0x4e, 0x56, 0x58,
+      0xf4, 0xfe, 0xfd, 0x13, 0x0b, 0xd5, 0xbe, 0x08, 0xfe, 0x68, 0xaf,
+      0x3e, 0x4a, 0x29, 0x02, 0x72, 0xec, 0x06, 0x5f, 0xd3, 0x67, 0x1f,
+      0x3c, 0x25, 0xbf, 0x8e, 0xc4, 0x19, 0xdd, 0xc9, 0xb8, 0x22};
+  static const uint8_t kMinIterations = 40;
+
+  const EC_GROUP *group = EC_group_p256();
+  UniquePtr<EC_POINT> point(EC_POINT_new(group));
+  ASSERT_TRUE(point);
+  ASSERT_TRUE(EC_wpa3_sae_hunt_and_peck_p256(group, point.get(), kSalt,
+                                             sizeof(kSalt), kIKM, sizeof(kIKM),
+                                             kMinIterations));
+  std::vector<uint8_t> buf;
+  ASSERT_TRUE(
+      EncodeECPoint(&buf, group, point.get(), POINT_CONVERSION_UNCOMPRESSED));
+  EXPECT_EQ(Bytes(kExpected), Bytes(buf));
+
+  // This test vector takes two iterations. Running with fewer iterations than
+  // expected should still work.
+  point.reset(EC_POINT_new(group));
+  ASSERT_TRUE(point);
+  ASSERT_TRUE(EC_wpa3_sae_hunt_and_peck_p256(
+      group, point.get(), kSalt, sizeof(kSalt), kIKM, sizeof(kIKM), 1));
+  ASSERT_TRUE(
+      EncodeECPoint(&buf, group, point.get(), POINT_CONVERSION_UNCOMPRESSED));
+  EXPECT_EQ(Bytes(kExpected), Bytes(buf));
+
+  // This is an IKM value that takes 25 iterations before it finds a point. This
+  // was found via brute force, so it has only been tested against our own
+  // implementation.
+  static const uint8_t kIKM2[] = {0x0f, 0xd8, 0x44, 0x7d, 0xb4, 0xa6,
+                                  0x02, 0x24, 0x66, 0x46, 0x49, 0xed,
+                                  0xe9, 0xcb, 0xdd, 0xb1};
+  static const uint8_t kExpected2[] = {
+      0x04, 0x80, 0x22, 0x98, 0x77, 0x74, 0x4b, 0x3c, 0x85, 0xd4, 0x0c,
+      0xef, 0x54, 0x10, 0x8c, 0xfd, 0xb9, 0x45, 0x8c, 0xe8, 0x8f, 0x47,
+      0xb6, 0x93, 0xf4, 0x30, 0x19, 0x43, 0xe1, 0x6f, 0x12, 0xd0, 0x6d,
+      0x83, 0x87, 0x58, 0xc0, 0x79, 0x2c, 0x58, 0x57, 0x0b, 0x62, 0x8e,
+      0x6c, 0xb7, 0x35, 0xe6, 0x45, 0xda, 0xb3, 0x80, 0xad, 0xdb, 0xaf,
+      0xda, 0x7a, 0x1c, 0x60, 0x7c, 0xd3, 0xa7, 0xa1, 0x68, 0x3d};
+  for (uint8_t min_iterations = 0; min_iterations < 32; min_iterations++) {
+    SCOPED_TRACE(int{min_iterations});
+    point.reset(EC_POINT_new(group));
+    ASSERT_TRUE(point);
+    ASSERT_TRUE(EC_wpa3_sae_hunt_and_peck_p256(group, point.get(), kSalt,
+                                               sizeof(kSalt), kIKM2,
+                                               sizeof(kIKM2), min_iterations));
+    ASSERT_TRUE(
+        EncodeECPoint(&buf, group, point.get(), POINT_CONVERSION_UNCOMPRESSED));
+    EXPECT_EQ(Bytes(kExpected2), Bytes(buf));
+  }
+
+  // The function should check for the wrong group.
+  UniquePtr<EC_POINT> point_p384(EC_POINT_new(EC_group_p384()));
+  ASSERT_TRUE(point_p384);
+  EXPECT_FALSE(EC_wpa3_sae_hunt_and_peck_p256(EC_group_p384(), point_p384.get(),
+                                              kSalt, sizeof(kSalt), kIKM,
+                                              sizeof(kIKM), kMinIterations));
+  EXPECT_FALSE(EC_wpa3_sae_hunt_and_peck_p256(EC_group_p256(), point_p384.get(),
+                                              kSalt, sizeof(kSalt), kIKM,
+                                              sizeof(kIKM), kMinIterations));
+  EXPECT_FALSE(EC_wpa3_sae_hunt_and_peck_p256(EC_group_p384(), point.get(),
+                                              kSalt, sizeof(kSalt), kIKM,
+                                              sizeof(kIKM), kMinIterations));
+}
+
 #if !defined(BORINGSSL_SHARED_LIBRARY)
 TEST(ECTest, HashToScalar) {
   struct HashToScalarTest {

@@ -552,8 +552,8 @@ int bssl::ec_jacobian_to_affine_batch(const EC_GROUP *group, EC_AFFINE *out,
   return group->meth->jacobian_to_affine_batch(group, out, in, num);
 }
 
-static void ec_y_sqr_from_x(const EC_GROUP *group, EC_FELEM *out,
-                            const EC_FELEM *x) {
+void bssl::ec_y_sqr_from_x(const EC_GROUP *group, EC_FELEM *out,
+                           const EC_FELEM *x) {
   ec_felem_sqr(group, out, x);               // out = x^2
   ec_felem_add(group, out, out, &group->a);  // out = x^2 + a
   ec_felem_mul(group, out, out, x);          // out = x^3 + ax

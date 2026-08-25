@@ -77,6 +77,24 @@ int ec_felem_from_bytes(const EC_GROUP *group, EC_FELEM *out, const uint8_t *in,
   return 1;
 }
 
+crypto_word_t ec_felem_from_bytes_or_placeholder(const EC_GROUP *group,
+                                                 EC_FELEM *out,
+                                                 const uint8_t *in,
+                                                 size_t len) {
+  const BIGNUM *field = &group->field.N;
+  BSSL_CHECK(len == BN_num_bytes(field));
+  bn_big_endian_to_words(out->words, field->width, in, len);
+  BN_ULONG ok =
+      BN_ULONG{0} - bn_less_than_words(out->words, field->d, field->width);
+  // Replace `out->words` with an arbitrary valid field element if out of range.
+  // This avoids breaking preconditions of later operations.
+  for (int i = 0; i < field->width; i++) {
+    out->words[i] &= ok;
+  }
+  ec_felem_to_montgomery(group, out, out);
+  return ok;
+}
+
 void ec_felem_neg(const EC_GROUP *group, EC_FELEM *out, const EC_FELEM *a) {
   // -a is zero if a is zero and p-a otherwise.
   BN_ULONG mask = ec_felem_non_zero_mask(group, a);
