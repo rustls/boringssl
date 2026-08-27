@@ -221,8 +221,8 @@ var (
 )
 
 var (
-	testOCSPExtension = append([]byte{byte(extensionStatusRequest) >> 8, byte(extensionStatusRequest), 0, 8, statusTypeOCSP, 0, 0, 4}, testOCSPResponse...)
-	testSCTExtension  = append([]byte{byte(extensionSignedCertificateTimestamp) >> 8, byte(extensionSignedCertificateTimestamp), 0, byte(len(testSCTList))}, testSCTList...)
+	testOCSPExtension = append([]byte{byte(extensionStatusRequest >> 8), byte(extensionStatusRequest), 0, 8, statusTypeOCSP, 0, 0, 4}, testOCSPResponse...)
+	testSCTExtension  = append([]byte{byte(extensionSignedCertificateTimestamp >> 8), byte(extensionSignedCertificateTimestamp), 0, byte(len(testSCTList))}, testSCTList...)
 )
 
 var (
@@ -813,7 +813,7 @@ func doExchange(test *testCase, config *Config, conn net.Conn, isResume bool, tr
 		}
 		conn = connDebug
 		if *flagDebug {
-			defer connDebug.WriteTo(os.Stdout)
+			defer connDebug.WriteFlowsTo(os.Stdout)
 		}
 		if *transcriptDir != "" {
 			defer func() {
