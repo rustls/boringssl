@@ -792,6 +792,11 @@ OPENSSL_EXPORT void SSL_CTX_set1_buffer_pool(SSL_CTX *ctx,
 // example, a callback could evaluate application-specific SNI rules to filter
 // down to an ECDSA and RSA credential, then configure both for BoringSSL to
 // select between the two.
+//
+// On the server, the credential is selected before resumption. By default,
+// sessions established when using one credential can be resumed on other
+// credentials. Callers can partition sessions with
+// `SSL_CREDENTIAL_set1_session_id_context`.
 
 // SSL_CREDENTIAL_new_x509 returns a new, empty X.509 credential, or NULL on
 // error. Callers should release the result with `SSL_CREDENTIAL_free` when
@@ -907,6 +912,19 @@ OPENSSL_EXPORT int SSL_CREDENTIAL_set1_signed_cert_timestamp_list(
 // that do not.
 OPENSSL_EXPORT void SSL_CREDENTIAL_set_must_match_issuer(SSL_CREDENTIAL *cred,
                                                          int match);
+
+// SSL_CREDENTIAL_set1_session_id_context sets `cred`'s session ID context to
+// `sid_ctx`. It returns one on success and zero on error. The session ID
+// context is an application-defined opaque byte string used to partition
+// session resumption. A session will not be used in a connection without a
+// matching session ID context.
+//
+// If unset on a server credential, the session ID context configured on the
+// `SSL` (or `SSL_CTX`) will be used. See `SSL_CTX_set_session_id_context`.
+//
+// This setting is only applicable to server credentials.
+OPENSSL_EXPORT int SSL_CREDENTIAL_set1_session_id_context(
+    SSL_CREDENTIAL *cred, const uint8_t *sid_ctx, size_t sid_ctx_len);
 
 // SSL_CTX_add1_credential appends `cred` to `ctx`'s credential list. It returns
 // one on success and zero on error. The credential list is maintained in order
@@ -2185,7 +2203,8 @@ OPENSSL_EXPORT int SSL_SESSION_is_resumable_across_names(
 // be cached under different keys. A client that connects to the same host with,
 // e.g., different cipher suite settings or client certificates should also use
 // separate session caches between those contexts. Servers should also partition
-// session caches between SNI hosts with `SSL_CTX_set_session_id_context`.
+// session caches between SNI hosts with `SSL_CTX_set_session_id_context` or
+// `SSL_CREDENTIAL_set1_session_id_context`.
 //
 // Note also, in TLS 1.2 and earlier, offering sessions allows passive observers
 // to correlate different client connections. TLS 1.3 and later fix this,
@@ -2275,11 +2294,11 @@ OPENSSL_EXPORT uint32_t SSL_CTX_get_timeout(const SSL_CTX *ctx);
 
 // SSL_CTX_set_session_id_context sets `ctx`'s session ID context to `sid_ctx`.
 // It returns one on success and zero on error. The session ID context is an
-// application-defined opaque byte string. A session will not be used in a
-// connection without a matching session ID context.
+// application-defined opaque byte string used to partition session resumption.
+// A session will not be used in a connection without a matching session ID
+// context.
 //
-// For a server, if `SSL_VERIFY_PEER` is enabled, it is an error to not set a
-// session ID context.
+// See also `SSL_CREDENTIAL_set1_session_id_context`.
 OPENSSL_EXPORT int SSL_CTX_set_session_id_context(SSL_CTX *ctx,
                                                   const uint8_t *sid_ctx,
                                                   size_t sid_ctx_len);

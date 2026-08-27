@@ -702,7 +702,9 @@ type testCase struct {
 	// shimCredentials is a list of credentials which should be configured at
 	// the shim. It differs from shimCertificate only in whether the old or
 	// new APIs are used.
-	shimCredentials       []*Credential
+	shimCredentials []*Credential
+	// resumeShimCredentials, if set, overrides shimCredentials for resumption
+	// connections.
 	resumeShimCredentials []*Credential
 }
 
@@ -1620,6 +1622,7 @@ func appendCredentialFlags(flags []string, cred *Credential, prefix string, newC
 	if !cred.Properties.Empty() {
 		handleBase64Field("cert-properties", cred.Properties.Marshal())
 	}
+	handleBase64Field("session-id-context", cred.SessionIDContext)
 	return flags
 }
 
@@ -1652,6 +1655,10 @@ func runTest(dispatcher *shimDispatcher, statusChan chan statusMsg, test *testCa
 		flags = append(flags, "-server")
 	}
 
+	// Credential flags trigger state in the command-line parser, so append these
+	// flags first.
+	flags = append(flags, test.flags...)
+
 	// Configure the default credential.
 	shimCertificate := test.shimCertificate
 	if shimCertificate == nil && len(test.shimCredentials) == 0 && len(test.resumeShimCredentials) == 0 && test.testType == serverTest && len(test.config.PreSharedKey) == 0 {
@@ -1669,8 +1676,12 @@ func runTest(dispatcher *shimDispatcher, statusChan chan statusMsg, test *testCa
 	}
 
 	// Configure any additional credentials.
+	var initialPrefix string
+	if len(test.resumeShimCredentials) > 0 {
+		initialPrefix = "-on-initial"
+	}
 	for _, cred := range test.shimCredentials {
-		flags = appendCredentialFlags(flags, cred, "", true)
+		flags = appendCredentialFlags(flags, cred, initialPrefix, true)
 	}
 	for _, cred := range test.resumeShimCredentials {
 		flags = appendCredentialFlags(flags, cred, "-on-resume", true)
@@ -1859,8 +1870,6 @@ func runTest(dispatcher *shimDispatcher, statusChan chan statusMsg, test *testCa
 	if test.config.Credential != nil {
 		flags = append(flags, "-trust-cert", test.config.Credential.RootPath)
 	}
-
-	flags = append(flags, test.flags...)
 
 	var env []string
 	if mallocNumToFail >= 0 {
@@ -2337,6 +2346,7 @@ func main() {
 	addMinimumVersionTests()
 	addExtensionTests()
 	addResumptionVersionTests()
+	addCredentialSessionIDContextTests()
 	addExtendedMasterSecretTests()
 	addRenegotiationTests()
 	addDTLSReplayTests()

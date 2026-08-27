@@ -631,6 +631,10 @@ const Flag<TestConfig> *FindFlag(const char *name) {
                                     &CredentialConfig::psk_hash, EVP_sha384())),
         CredentialFlag(
             Base64Flag("-cert-properties", &CredentialConfig::cert_properties)),
+        CredentialFlagWithDefault(
+            Base64Flag("-session-id-context", &TestConfig::session_id_context),
+            Base64Flag("-session-id-context",
+                       &CredentialConfig::session_id_context)),
         IntFlag("-private-key-delay-ms", &TestConfig::private_key_delay_ms),
         BoolFlag("-resumption-across-names-enabled",
                  &TestConfig::resumption_across_names_enabled),
@@ -1651,6 +1655,13 @@ static bssl::UniquePtr<SSL_CREDENTIAL> CredentialFromConfig(
     }
   }
 
+  if (!cred_config.session_id_context.empty() &&
+      !SSL_CREDENTIAL_set1_session_id_context(
+          cred.get(), cred_config.session_id_context.data(),
+          cred_config.session_id_context.size())) {
+    return nullptr;
+  }
+
   if (!SetCredentialInfo(cred.get(), std::move(info))) {
     return nullptr;
   }
@@ -2159,6 +2170,12 @@ bssl::UniquePtr<SSL_CTX> TestConfig::SetupCtx(SSL_CTX *old_ctx) const {
 
   if (resumption_across_names_enabled) {
     SSL_CTX_set_resumption_across_names_enabled(ssl_ctx.get(), 1);
+  }
+
+  if (!session_id_context.empty() &&
+      !SSL_CTX_set_session_id_context(ssl_ctx.get(), session_id_context.data(),
+                                      session_id_context.size())) {
+    return nullptr;
   }
 
   if (old_ctx) {

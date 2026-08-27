@@ -52,6 +52,7 @@ struct CredentialConfig {
   std::vector<uint8_t> psk_identity;
   std::vector<uint8_t> psk_context;
   const EVP_MD *psk_hash;
+  std::vector<uint8_t> session_id_context;
 };
 
 struct TestConfig {
@@ -262,6 +263,7 @@ struct TestConfig {
   std::optional<uint16_t> request_server_padding;
   bool expect_server_sent_requested_padding = false;
   bool server_supports_padding = false;
+  std::vector<uint8_t> session_id_context;
 
   std::vector<const char *> handshaker_args;
 

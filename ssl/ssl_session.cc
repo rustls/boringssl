@@ -45,6 +45,15 @@ static ExDataClass g_ex_data_class(/*with_app_data=*/true);
 static void SSL_SESSION_list_remove(SSLContext *ctx, SSL_SESSION *session);
 static void SSL_SESSION_list_add(SSLContext *ctx, SSL_SESSION *session);
 
+static Span<const uint8_t> ssl_handshake_session_id_context(
+    const SSL_HANDSHAKE *hs) {
+  if (hs->ssl->server && hs->credential != nullptr &&
+      !hs->credential->sid_ctx.empty()) {
+    return hs->credential->sid_ctx;
+  }
+  return hs->config->cert->sid_ctx;
+}
+
 UniquePtr<SSL_SESSION> ssl_session_new(const SSL_X509_METHOD *x509_method) {
   return MakeUnique<SSL_SESSION>(x509_method);
 }
@@ -251,8 +260,7 @@ bool ssl_get_new_session(SSL_HANDSHAKE *hs) {
     session->auth_timeout = ssl->session_ctx->session_timeout;
   }
 
-  if (!session->sid_ctx.TryCopyFrom(hs->config->cert->sid_ctx)) {
-    OPENSSL_PUT_ERROR(SSL, ERR_R_INTERNAL_ERROR);
+  if (!session->sid_ctx.TryCopyFrom(ssl_handshake_session_id_context(hs))) {
     return false;
   }
 
@@ -466,7 +474,7 @@ SSLSessionType ssl_session_get_type(const SSL_SESSION *session) {
 bool ssl_session_is_context_valid(const SSL_HANDSHAKE *hs,
                                   const SSL_SESSION *session) {
   return session != nullptr &&
-         Span(session->sid_ctx) == hs->config->cert->sid_ctx;
+         Span(session->sid_ctx) == ssl_handshake_session_id_context(hs);
 }
 
 bool ssl_session_is_time_valid(const SSLImpl *ssl, const SSL_SESSION *session) {

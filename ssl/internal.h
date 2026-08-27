@@ -1543,6 +1543,10 @@ class SSLCredential : public ssl_credential_st,
   // OCSP response to be sent to the client, if requested.
   UniquePtr<CRYPTO_BUFFER> ocsp_response;
 
+  // sid_ctx partitions the session space within a shared session cache or
+  // ticket key. If empty, the session ID context in `SSL` will be used.
+  InplaceVector<uint8_t, SSL_MAX_SID_CTX_LENGTH> sid_ctx;
+
   // SPAKE2+-specific information.
   Array<uint8_t> pake_context;
   Array<uint8_t> client_identity;

@@ -2549,11 +2549,19 @@ type Credential struct {
 	// Properties is the certificate properties (draft-ietf-tls-trust-anchor-ids)
 	// associated with this credential.
 	Properties CertificatePropertyList
+	// SessionIDContext is the session ID context to configure on the credential.
+	SessionIDContext []byte
 }
 
 func (c *Credential) WithSignatureAlgorithms(sigAlgs ...signatureAlgorithm) *Credential {
 	ret := *c
 	ret.SignatureAlgorithms = sigAlgs
+	return &ret
+}
+
+func (c *Credential) WithSessionIDContext(sidCtx []byte) *Credential {
+	ret := *c
+	ret.SessionIDContext = sidCtx
 	return &ret
 }
 
