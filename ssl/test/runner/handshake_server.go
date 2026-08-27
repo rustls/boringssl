@@ -48,12 +48,6 @@ type serverHandshakeState struct {
 
 // serverHandshake performs a TLS handshake as a server.
 func (c *Conn) serverHandshake() error {
-	config := c.config
-
-	// If this is the first server handshake, we generate a random key to
-	// encrypt the tickets with.
-	config.serverInitOnce.Do(config.serverInit)
-
 	c.sendHandshakeSeq = 0
 	c.recvHandshakeSeq = 0
 
